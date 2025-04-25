@@ -1,16 +1,14 @@
 #!/bin/bash
-
 set -e
 
-echo "🔧 Starting DevOps tool installation..."
-
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-TOOLS_FILE="${SCRIPT_DIR}/tools.txt"
+TOOLS_FILE=$1
 
 if [[ ! -f "$TOOLS_FILE" ]]; then
-  echo "❌ tools.txt not found!"
+  echo "❌ tools.txt not found at $TOOLS_FILE"
   exit 1
 fi
+
+echo "🔧 Starting DevOps tool installation from $TOOLS_FILE..."
 
 while IFS= read -r tool; do
   [[ -z "$tool" || "$tool" =~ ^# ]] && continue  # Skip empty lines or comments
