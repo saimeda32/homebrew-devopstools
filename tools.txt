@@ -1,0 +1,19 @@
+awscli
+azure-cli
+kubectl
+helm
+warrensbox/tap/tfswitch
+docker
+git
+bridgecrewio/checkov/checkov
+derailed/k9s/k9s
+jq
+curl
+httpie
+wget
+nmap
+telnet
+netcat
+bind          # for dig
+inetutils     # for nslookup
+wireshark
