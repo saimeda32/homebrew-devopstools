@@ -11,16 +11,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repo (No Token Injection)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # 🟢 Prevent GITHUB_TOKEN from configuring HTTPS auth
 
-      - name: Download Repo Tarball
+      - name: Download Tarball and Calculate SHA256
         run: |
-          echo "🔽 Downloading tarball..."
           curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/refs/heads/main.tar.gz
           sha256sum repo.tar.gz > sha256.txt
 
-      - name: Extract SHA256
+      - name: Extract SHA256 Value
         id: sha
         run: |
           SHA=$(cut -d ' ' -f1 sha256.txt)
@@ -30,16 +31,17 @@ jobs:
       - name: Update Formula File
         run: |
           sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
-          echo "📝 Updated Formula file."
+          echo "📝 Updated Formula:"
           cat Formula/devopstools.rb
 
-      - name: Configure Git for PAT Authentication
+      - name: Configure Git for PAT Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          echo "✅ Remote URL configured with PAT."
 
-      - name: Commit and Push Updated SHA256
+      - name: Commit and Push Changes
         run: |
           git add Formula/devopstools.rb
           git commit -m "CI: Auto-update SHA256 checksum" || echo "✅ No changes to commit."
