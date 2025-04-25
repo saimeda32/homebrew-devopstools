@@ -18,7 +18,8 @@ jobs:
 
       - name: Download Tarball and Calculate SHA256
         run: |
-          curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/refs/heads/main.tar.gz
+          curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz
+
           sha256sum repo.tar.gz > sha256.txt
 
       - name: Extract SHA256 Value
