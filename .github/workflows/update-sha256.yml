@@ -34,3 +34,8 @@ jobs:
         with:
           commit_message: "CI: Auto-update SHA256 checksum"
           branch: main
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+          push_options: '--force'
+        env:
+          GIT_AUTH_TOKEN: ${{ secrets.GH_PAT }}
