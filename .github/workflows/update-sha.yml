@@ -1,0 +1,43 @@
+name: Update SHA256 After URL Commit
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Formula/devopstools.rb'
+
+jobs:
+  update-sha:
+    if: github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+
+      - name: Get Current Commit SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Download Tarball and Calculate SHA256
+        run: |
+          curl -L -o repo.tar.gz https://github.com/${GITHUB_REPOSITORY}/archive/${{ env.sha }}.tar.gz
+          SHA256=$(sha256sum repo.tar.gz | awk '{ print $1 }')
+          echo "sha256=$SHA256" >> $GITHUB_ENV
+          echo "Calculated SHA256: $SHA256"
+
+      - name: Update SHA256 in Formula
+        run: |
+          sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
+          git add Formula/devopstools.rb
+          git commit -m "CI: Update SHA256 checksum for ${{ env.sha }} [skip ci]" || echo "No changes"
+          git push origin main
