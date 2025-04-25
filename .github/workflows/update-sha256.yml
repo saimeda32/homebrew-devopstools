@@ -1,4 +1,4 @@
-name: Update SHA256 Checksum
+name: Safe SHA256 and URL Update for Homebrew Formula
 
 on:
   push:
@@ -8,45 +8,47 @@ on:
 
 jobs:
   update-sha256:
-    if: github.actor != 'github-actions[bot]'  # Prevent loop when bot commits
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository (Disable Token Injection)
+      - name: Checkout Repository (No Token Injection)
         uses: actions/checkout@v4
         with:
-          persist-credentials: false  # Prevent GITHUB_TOKEN overwriting git credentials
-
-      - name: Download Tarball and Calculate SHA256
-        run: |
-          echo "🔽 Downloading tarball for commit ${{ github.sha }}"
-          curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz
-          sha256sum repo.tar.gz > sha256.txt
-
-      - name: Extract SHA256 Value
-        id: sha
-        run: |
-          SHA=$(cut -d ' ' -f1 sha256.txt)
-          echo "sha256=$SHA" >> $GITHUB_ENV
-          echo "✅ Calculated SHA256: $SHA"
-
-      - name: Update Formula File (Replace URL and SHA256)
-        run: |
-          echo "📝 Updating Formula/devopstools.rb"
-          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz\"|" Formula/devopstools.rb
-          sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
-          echo "✅ Formula file after update:"
-          cat Formula/devopstools.rb
+          persist-credentials: false
 
       - name: Configure Git for PAT Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-          echo "✅ Git remote updated for PAT push."
 
-      - name: Commit and Push Changes
+      - name: Step 1: Update Formula URL (First Commit)
         run: |
+          echo "🔗 First, update the formula URL with current SHA: ${{ github.sha }}"
+          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz\"|" Formula/devopstools.rb
           git add Formula/devopstools.rb
-          git commit -m "CI: Auto-update SHA256 checksum [skip ci]" || echo "✅ No changes to commit."
+          git commit -m "CI: Update formula URL to ${{ github.sha }} [skip ci]" || echo "✅ No URL changes to commit."
+          git push origin main
+
+      - name: Step 2: Pull Latest Commit SHA (after URL commit)
+        run: |
+          NEW_SHA=$(git rev-parse HEAD)
+          echo "new_sha=$NEW_SHA" >> $GITHUB_ENV
+          echo "✅ Latest SHA after URL update: $NEW_SHA"
+
+      - name: Step 3: Download Tarball and Calculate SHA256 (Fresh Tarball After URL Commit)
+        run: |
+          echo "🔽 Downloading tarball for commit ${{ env.new_sha }}"
+          curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/${{ env.new_sha }}.tar.gz
+          sha256sum repo.tar.gz > sha256.txt
+          SHA=$(cut -d ' ' -f1 sha256.txt)
+          echo "sha256=$SHA" >> $GITHUB_ENV
+          echo "✅ Calculated SHA256 for ${{ env.new_sha }}: $SHA"
+
+      - name: Step 4: Update SHA256 in Formula and Commit Again
+        run: |
+          sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
+          git add Formula/devopstools.rb
+          git commit -m "CI: Update SHA256 checksum for ${{ env.new_sha }} [skip ci]" || echo "✅ No SHA256 changes to commit."
           git push origin main
