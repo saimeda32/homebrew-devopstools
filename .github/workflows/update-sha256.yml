@@ -1,0 +1,36 @@
+name: Update SHA256 Checksum
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  update-sha256:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Download Repo Tarball
+        run: |
+          curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/refs/heads/main.tar.gz
+          sha256sum repo.tar.gz > sha256.txt
+
+      - name: Extract SHA256 Value
+        id: sha
+        run: |
+          SHA=$(cut -d ' ' -f1 sha256.txt)
+          echo "sha256=$SHA" >> $GITHUB_ENV
+
+      - name: Update Formula File
+        run: |
+          sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
+
+      - name: Commit and Push Changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "CI: Auto-update SHA256 checksum"
+          branch: main
