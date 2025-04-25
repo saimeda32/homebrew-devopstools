@@ -2,7 +2,7 @@ class Devopstools < Formula
   desc "Bundle installer for DevOps tools"
   homepage "https://github.com/saimeda32/homebrew-devopstools"
   url "https://github.com/saimeda32/homebrew-devopstools/archive/refs/heads/main.tar.gz"
-  sha256 "0b589c69b71a5fc83a96eed96109cad3e7465a5044a166bf9dbb82192cb56361"
+  sha256 "4a697e4d8a46facad79f05e7a59eaefdb07d6dcd229a8adb5f3b79fbf9c71b13"
   version "1.0.0"
 
   def install
