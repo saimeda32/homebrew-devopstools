@@ -24,11 +24,13 @@ jobs:
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
       - name: Step 1: Update Formula URL (First Commit)
+        env:
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          echo "🔗 First, update the formula URL with current SHA: ${{ github.sha }}"
-          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz\"|" Formula/devopstools.rb
+          echo "🔗 Updating the formula URL with SHA: $CURRENT_SHA"
+          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/${CURRENT_SHA}.tar.gz\"|" Formula/devopstools.rb
           git add Formula/devopstools.rb
-          git commit -m "CI: Update formula URL to ${{ github.sha }} [skip ci]" || echo "✅ No URL changes to commit."
+          git commit -m "CI: Update formula URL to $CURRENT_SHA [skip ci]" || echo "✅ No URL changes to commit."
           git push origin main
 
       - name: Step 2: Pull Latest Commit SHA (after URL commit)
