@@ -32,6 +32,7 @@ jobs:
           git push origin main
 
       - name: Step 2: Pull Latest Commit SHA (after URL commit)
+        id: get_sha
         run: |
           NEW_SHA=$(git rev-parse HEAD)
           echo "new_sha=$NEW_SHA" >> $GITHUB_ENV
