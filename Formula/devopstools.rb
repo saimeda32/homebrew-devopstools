@@ -1,6 +1,6 @@
 class Devopstools < Formula
   desc "Bundle installer for DevOps tools"
-  homepage "https://github.com/yourname/homebrew-devopstools"
+  homepage "https://github.com/saimeda32/homebrew-devopstools"
   version "1.0.0"
 
   def install
