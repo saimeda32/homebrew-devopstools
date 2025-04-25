@@ -16,6 +16,7 @@ jobs:
 
       - name: Download Repo Tarball
         run: |
+          echo "🔽 Downloading tarball..."
           curl -L -o repo.tar.gz https://github.com/${{ github.repository }}/archive/refs/heads/main.tar.gz
           sha256sum repo.tar.gz > sha256.txt
 
@@ -24,21 +25,22 @@ jobs:
         run: |
           SHA=$(cut -d ' ' -f1 sha256.txt)
           echo "sha256=$SHA" >> $GITHUB_ENV
-          echo "✅ SHA256 calculated: $SHA"
+          echo "✅ Calculated SHA256: $SHA"
 
-      - name: Update Formula
+      - name: Update Formula File
         run: |
           sed -i "s/sha256 \".*\"/sha256 \"${{ env.sha256 }}\"/" Formula/devopstools.rb
+          echo "📝 Updated Formula file."
           cat Formula/devopstools.rb
 
-      - name: Configure Git for PAT Push
+      - name: Configure Git for PAT Authentication
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Updated SHA256
         run: |
           git add Formula/devopstools.rb
-          git commit -m "CI: Auto-update SHA256 checksum" || echo "No changes to commit."
-          git push origin main --force
+          git commit -m "CI: Auto-update SHA256 checksum" || echo "✅ No changes to commit."
+          git push origin main
