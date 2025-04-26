@@ -1,46 +1,53 @@
-name: Update Homebrew Formula
+name: Auto Update Homebrew Formula
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'  # Trigger on version tags like v1.0.1, v2.0.0 etc.
+  workflow_dispatch:
 
 jobs:
   update-formula:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
-      - name: Set up Git
+    steps:
+      - name: Checkout Repository (disable token injection)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # Avoid default token messing with remotes
+
+      - name: Configure Git and Setup Remote
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
 
       - name: Extract Tag Name
         id: extract_tag
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-      - name: Download Release Tarball
+      - name: Download Tagged Release Tarball and Calculate SHA256
         run: |
+          echo "🔽 Downloading tarball for tag ${{ env.tag }}"
           curl -L -o release.tar.gz https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.tag }}.tar.gz
-
-      - name: Calculate SHA256 Checksum
-        id: sha256
-        run: |
           SHA256=$(sha256sum release.tar.gz | awk '{ print $1 }')
           echo "sha256=$SHA256" >> $GITHUB_ENV
+          echo "✅ Calculated SHA256: $SHA256"
 
-      - name: Update Formula File
+      - name: Update Formula File (URL, version, and SHA256)
         run: |
           sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.tag }}.tar.gz\"|" Formula/devopstools.rb
           sed -i "s|sha256 \".*\"|sha256 \"${{ env.sha256 }}\"|" Formula/devopstools.rb
           sed -i "s|version \".*\"|version \"${{ env.tag }}\"|" Formula/devopstools.rb
+          echo "✅ Formula file updated:"
+          cat Formula/devopstools.rb
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Changes to Main Branch (Handles Detached HEAD)
         run: |
+          git fetch origin main
+          git switch main
+          git pull origin main
+
           git add Formula/devopstools.rb
-          git commit -m "Update formula to version ${{ env.tag }}"
+          git commit -m "CI: Update formula to version ${{ env.tag }}" || echo "✅ No changes to commit."
           git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
