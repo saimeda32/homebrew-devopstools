@@ -8,6 +8,10 @@ class Devopstools < Formula
 
   def install
     bin.install "install.sh"
+    # install user-facing wrapper so `devopstools` is available in PATH
+    if File.exist?("bin/devopstools")
+      bin.install "bin/devopstools"
+    end
     pkgshare.install "tools.txt"
   end
 
