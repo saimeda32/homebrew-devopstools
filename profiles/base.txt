@@ -1,0 +1,10 @@
+# Base profile: minimal tools for all developers
+git
+curl
+jq
+yq
+bind
+inetutils
+netcat
+wget
+wireshark

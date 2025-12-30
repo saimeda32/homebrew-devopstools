@@ -1,0 +1,9 @@
+# Frontend profile
+node
+pnpm
+yarn
+npm:expo-cli
+npm:eas-cli
+git
+curl
+yq
