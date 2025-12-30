@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 
-# Simple wrapper so Homebrew users can run `devopstools` after install.
+# Wrapper that runs `scripts/apply_profiles.sh`.
+# Works both in the source tree and when installed by Homebrew.
 set -euo pipefail
+
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPTS_DIR="$HERE/scripts"
-if [ ! -x "$SCRIPTS_DIR/apply_profiles.sh" ]; then
-  echo "devopstools helper missing: $SCRIPTS_DIR/apply_profiles.sh" >&2
+
+# If installed via Homebrew the opt path is a reliable fallback
+HOMEBREW_OPT_SCRIPTS="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/devopstools/scripts"
+
+if [ -x "$SCRIPTS_DIR/apply_profiles.sh" ]; then
+  exec "$SCRIPTS_DIR/apply_profiles.sh" "$@"
+elif [ -x "$HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" ]; then
+  exec "$HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" "$@"
+else
+  echo "devopstools helper missing: $SCRIPTS_DIR/apply_profiles.sh or $HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" >&2
   exit 2
 fi
-exec "$SCRIPTS_DIR/apply_profiles.sh" "$@"
