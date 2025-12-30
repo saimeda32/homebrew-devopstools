@@ -12,6 +12,11 @@ class Devopstools < Formula
     if File.exist?("bin/devopstools")
       bin.install "bin/devopstools"
     end
+    # install scripts directory so installed wrapper can find helpers at
+    # #{opt_prefix}/scripts (Homebrew's opt path)
+    if File.directory?("scripts")
+      prefix.install "scripts"
+    end
     pkgshare.install "tools.txt"
   end
 
