@@ -33,7 +33,7 @@ devopstools --profiles frontend --dry-run --non-interactive
 ```
 
 - Merge `base` + `frontend` and run installer interactively (prompts before
-	proceeding):
+    proceeding):
 ```bash
 devopstools --profiles base,frontend
 ```
@@ -59,8 +59,8 @@ Profiles and `tools.txt`
 
 CI recommendations
 - Run `scripts/validate_tools.sh tools.txt` on PRs to detect policy gaps.
-- Optionally run `devopstools --profiles <profile> --dry-run` in macOS
-	runners to detect runtime install errors.
+-- Optionally run `devopstools --profiles base --dry-run` or
+-- `devopstools --profiles frontend --dry-run` in macOS runners to detect runtime install errors.
 
 Contributing & PRs
 - Make changes on a branch and open a PR against `main`. Example commands:
