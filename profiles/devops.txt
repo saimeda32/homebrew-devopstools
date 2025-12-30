@@ -1,0 +1,14 @@
+# DevOps profile
+tfswitch
+awscli
+azure-cli
+kubectl
+helm
+k9s
+checkov
+consul
+vault
+packer
+git
+curl
+yq

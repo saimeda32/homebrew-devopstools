@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Simple wrapper so Homebrew users can run `devopstools` after install.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPTS_DIR="$HERE/scripts"
+if [ ! -x "$SCRIPTS_DIR/apply_profiles.sh" ]; then
+  echo "devopstools helper missing: $SCRIPTS_DIR/apply_profiles.sh" >&2
+  exit 2
+fi
+exec "$SCRIPTS_DIR/apply_profiles.sh" "$@"

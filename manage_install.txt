@@ -1,0 +1,13 @@
+→ oh-my-zsh not present; will install non-interactively
+✓ Installed oh-my-zsh
+→ Installing plugin git
+✖ Could not non-interactively clone https://github.com/zsh-users/git.git for plugin git
+✖ Could not install plugin git — manual action required
+Some plugins could not be installed automatically; see output above.
+
+Summary:
+  oh-my-zsh: skipped
+  Theme: aligned
+  Plugins added: none
+  Plugins skipped: none
+  zshrc: updated

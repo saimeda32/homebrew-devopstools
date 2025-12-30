@@ -1,19 +1,51 @@
+## Cloud CLIs
 awscli
 azure-cli
+
+## Kubernetes & Cluster Ops
 kubectl
 helm
-warrensbox/tap/tfswitch
+tap: derailed/k9s
+k9s
+
+## Version managers
+tap: warrensbox/tap
+tfswitch  # manage Terraform versions
+
+## Containers & Local Dev
 docker
+
+## Security & Scanning
+tap: bridgecrewio/checkov
+checkov
+
+## Dev Utilities
 git
-bridgecrewio/checkov/checkov
-derailed/k9s/k9s
 jq
+yq
 curl
 httpie
 wget
-nmap
-telnet
-netcat
+node
+pnpm
+yarn
+
+# JS / Mobile tooling (installed via npm)
+npm:expo-cli
+npm:eas-cli
+npm:serve
+
+## Networking & Diagnostics
 bind          # for dig
 inetutils     # for nslookup
+nmap
+netcat
+telnet
 wireshark
+
+## Optional (enable if your team uses these)
+tap: hashicorp/tap
+vault
+consul
+packer
+
