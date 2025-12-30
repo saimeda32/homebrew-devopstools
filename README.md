@@ -1,90 +1,84 @@
-# 🍺 Homebrew DevOps Tools Tap
+# homebrew-devopstools
 
-A small Homebrew Tap that bundles a curated list of DevOps tools and provides a reusable installer script.
+Enterprise-ready installer and profile manager for developer workstations
 
-This repository aims to be community-friendly: idempotent installs, clear logging, CI checks, and explicit manual runs to avoid surprises during formula installation.
+This repository provides a safe, auditable, and idempotent framework to
+provision macOS developer workstations using Homebrew as the primary
+package manager. It enforces policy (e.g. Terraform via tfswitch only),
+provides role-based profiles, and includes non-destructive zsh configuration
+management for teams.
 
-## Quick Start
+Quick concepts
+- `tools.txt`: canonical inventory and policy surface (source-of-truth).
+- `profiles/*.txt`: curated subsets of `tools.txt` for team/workstation roles.
+- `install.sh`: idempotent installer that understands `tap:`, `npm:`, `pipx:`
+	and enforces enterprise policies.
+- `scripts/manage_zshrc.sh`: idempotent, non-destructive zshrc manager.
+- `scripts/apply_profiles.sh` & `bin/devopstools`: interactive and scripted
+	helpers to merge profiles and invoke the installer.
 
-1. Tap the repo:
+Safety-first defaults
+- Dry-run by default for user-facing helpers; nothing is changed unless
+	`--no-dry-run` / explicit consent is provided.
+- Backups: any file modified by `manage_zshrc.sh` is backed up
+	as `<file>.bak.<epoch>` before changes are applied.
+- Plugin installs and network operations are opt-in and non-interactive to
+	support locked-down networks and CI.
 
+Usage examples
+
+- Preview installing the `frontend` profile (no changes):
 ```bash
-brew tap yourname/devopstools
+devopstools --profiles frontend --dry-run --non-interactive
 ```
 
-2. Install the formula (this only installs the helper script and asset files):
-
+- Merge `base` + `frontend` and run installer interactively (prompts before
+	proceeding):
 ```bash
-brew install yourname/devopstools/devopstools
+devopstools --profiles base,frontend
 ```
 
-3. Run the bundled installer (recommended: dry-run first):
-
+- Merge and install non-interactively (automation):
 ```bash
-# Dry-run to validate what would change
-./install.sh --dry-run tools.txt
-
-# Run for real (use --yes to allow the script to attempt permission fixes)
-./install.sh --yes tools.txt
+devopstools --profiles base,frontend --no-dry-run --yes --non-interactive
 ```
 
-Logs are written to:
+Zsh management
+- `scripts/manage_zshrc.sh` will:
+	- read defaults from `.devopstools/reference_zshrc` (this repo)
+	- insert/update a managed block in `~/.zshrc` without overwriting user
+		customizations outside the block
+	- back up the original `~/.zshrc` before modification
+	- defer plugin installation unless `--install-plugins` is passed
 
-- macOS: $HOME/Library/Logs/devopstools/install.log
+Profiles and `tools.txt`
+- Keep `tools.txt` as the canonical validated inventory for CI and policy
+	(run `scripts/validate_tools.sh tools.txt` in CI).
+- Profiles are lightweight curated lists. When adding a new tool, add it to
+	`tools.txt` first, then include it in the relevant profile(s).
 
-## Enterprise Workstation Model
+CI recommendations
+- Run `scripts/validate_tools.sh tools.txt` on PRs to detect policy gaps.
+- Optionally run `devopstools --profiles <profile> --dry-run` in macOS
+	runners to detect runtime install errors.
 
-This repository encodes the corporate workstation standard. It defines layered tooling and enforces policies so engineers do not need tribal knowledge.
+Contributing & PRs
+- Make changes on a branch and open a PR against `main`. Example commands:
+```bash
+git checkout -b feature/your-change
+git add -A
+git commit -m "Describe your change"
+git push -u origin feature/your-change
+# use gh if installed
+gh pr create --fill --base main --head feature/your-change
+```
 
-Layers (enforced):
-- Layer 1 — Control Planes: Terraform is managed ONLY via `tfswitch`. `terraform` must never be installed directly.
-- Layer 2 — Runtimes: `python@3.x` and `node` are installed via Homebrew only.
-- Layer 3 — Global CLIs: Python CLIs use `pipx`, JavaScript CLIs use `npm` (only when brew is inappropriate).
-- Layer 4 — Infra & Cloud tooling: Installed via Homebrew bottles where possible.
-- Layer 5 — System productivity: Safe universal tools via brew.
+If you prefer I can prepare a branch and push it for you. Note: pushing from
+this environment requires git remote permissions; if push fails, run the
+the commands above locally.
 
-Why `tfswitch` instead of `terraform`:
-- Using `tfswitch` enforces version gating, reproducibility, and avoids multiple projects installing conflicting Terraform binaries.
-- By policy, `terraform` is intentionally gated behind `tfswitch` and this repo will refuse direct `terraform` installs.
-
-Policy enforcement:
-- The installer and validator will fail or flag policy violations (for example direct `terraform` entries).
-- The repo provides `profiles/` for role-based tool bundles and `install.sh --profile <name>` to install them.
-
-Adding new tools:
-- Evaluate tool compatibility with the layering model.
-- Prefer Homebrew bottles; if the tooling is a Python CLI, add it as `pipx:tool` in the profile or `tools.txt`.
-- For npm tooling, add `npm:package` entries; the installer will use `npm` to install globally but only after installing `node` via Homebrew when necessary.
-
-Corporate mac constraints:
-- App Store is not used. All userland tools must be provided via Homebrew or package managers handled by this repo.
-- Installs are non-interactive and idempotent.
-
-
-## Files
-
-- `install.sh` — Idempotent installer script for Homebrew formulae.
-- `tools.txt` — One Homebrew formula per line. Comments with `#` are allowed.
-- `Formula/devopstools.rb` — Homebrew formula that installs the helper script.
-
-## CI
-
-GitHub Actions provides two checks:
-
-- `lint`: runs `shellcheck` on `install.sh`.
-- `test-dry-run`: executes the script in `--dry-run` mode on macOS.
-
-## Contributing
-
-- Add or update formula names in `tools.txt` (one per line).
-- Keep changes minimal and provide rationale in PR descriptions.
-- CI will validate formatting and run the dry-run.
-
-## License
-
-MIT — see the LICENSE file.
-
----
+License
+See LICENSE in the repository.
 
 If you want, I can also:
 
