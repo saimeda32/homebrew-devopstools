@@ -17,6 +17,10 @@ class Devopstools < Formula
     if File.directory?("scripts")
       prefix.install "scripts"
     end
+    # install profiles so installed package has curated profiles available
+    if File.directory?("profiles")
+      prefix.install "profiles"
+    end
     pkgshare.install "tools.txt"
   end
 
