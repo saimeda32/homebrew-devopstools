@@ -19,11 +19,11 @@ SELECTED_PROFILES=()
 
 print_usage(){
   cat <<EOF
-Usage: $0 [--profiles base,frontend,backend,devops|all] [--no-dry-run] [--yes] [--non-interactive]
+Usage: devopstools [--profiles base,frontend,backend,devops|all] [--no-dry-run] [--yes] [--non-interactive]
 
 Examples:
-  $0 --profiles base,devops            # merge 'base' and 'devops' profiles
-  $0 --profiles all --yes --non-interactive  # select all profiles and run without prompts
+  devopstools --profiles base,devops            # merge 'base' and 'devops' profiles
+  devopstools --profiles all --yes --non-interactive  # select all profiles and run without prompts
 
 If --profiles is omitted the script runs an interactive menu.
 EOF
