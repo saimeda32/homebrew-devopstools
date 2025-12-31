@@ -14,7 +14,11 @@ class Devopstools < Formula
     # place helper scripts and curated profiles in libexec so the wrapper
     # can reliably call them from the opt/libexec path
     libexec.install Dir["scripts/*"] if File.directory?("scripts")
-    libexec.install Dir["profiles/*"] if File.directory?("profiles")
+    # install profiles into the package prefix so scripts that expect
+    # REPO_ROOT/profiles will find them when the package is installed
+    if File.directory?("profiles")
+      prefix.install "profiles"
+    end
 
     pkgshare.install "tools.txt"
   end
