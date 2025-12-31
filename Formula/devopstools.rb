@@ -7,20 +7,15 @@ class Devopstools < Formula
 
 
   def install
+    # keep bin lean: install wrapper and top-level installer
+    bin.install "bin/devopstools"
     bin.install "install.sh"
-    # install user-facing wrapper so `devopstools` is available in PATH
-    if File.exist?("bin/devopstools")
-      bin.install "bin/devopstools"
-    end
-    # install scripts directory so installed wrapper can find helpers at
-    # #{opt_prefix}/scripts (Homebrew's opt path)
-    if File.directory?("scripts")
-      prefix.install "scripts"
-    end
-    # install profiles so installed package has curated profiles available
-    if File.directory?("profiles")
-      prefix.install "profiles"
-    end
+
+    # place helper scripts and curated profiles in libexec so the wrapper
+    # can reliably call them from the opt/libexec path
+    libexec.install Dir["scripts/*"] if File.directory?("scripts")
+    libexec.install Dir["profiles/*"] if File.directory?("profiles")
+
     pkgshare.install "tools.txt"
   end
 

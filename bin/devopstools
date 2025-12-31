@@ -5,16 +5,16 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPTS_DIR="$HERE/scripts"
+REPO_SCRIPTS="$HERE/scripts"
 
-# If installed via Homebrew the opt path is a reliable fallback
-HOMEBREW_OPT_SCRIPTS="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/devopstools/scripts"
+# If installed via Homebrew the libexec path is a reliable fallback
+HOMEBREW_LIBEXEC="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/devopstools/libexec"
 
-if [ -x "$SCRIPTS_DIR/apply_profiles.sh" ]; then
-  exec "$SCRIPTS_DIR/apply_profiles.sh" "$@"
-elif [ -x "$HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" ]; then
-  exec "$HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" "$@"
+if [ -x "$REPO_SCRIPTS/apply_profiles.sh" ]; then
+  exec "$REPO_SCRIPTS/apply_profiles.sh" "$@"
+elif [ -x "$HOMEBREW_LIBEXEC/apply_profiles.sh" ]; then
+  exec "$HOMEBREW_LIBEXEC/apply_profiles.sh" "$@"
 else
-  echo "devopstools helper missing: $SCRIPTS_DIR/apply_profiles.sh or $HOMEBREW_OPT_SCRIPTS/apply_profiles.sh" >&2
+  echo "devopstools helper missing: $REPO_SCRIPTS/apply_profiles.sh or $HOMEBREW_LIBEXEC/apply_profiles.sh" >&2
   exit 2
 fi
