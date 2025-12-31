@@ -12,14 +12,14 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILES_DIR="$REPO_ROOT/profiles"
 INSTALL_SH="$REPO_ROOT/install.sh"
 
-DRY_RUN=1
+DRY_RUN=0
 NON_INTERACTIVE=0
 YES=0
 SELECTED_PROFILES=()
 
 print_usage(){
   cat <<EOF
-Usage: devopstools [--profiles base,frontend,backend,devops|all] [--no-dry-run] [--yes] [--non-interactive]
+Usage: devopstools [--profiles base,frontend,backend,devops|all] [--dry-run] [--yes] [--non-interactive]
 
 Examples:
   devopstools --profiles base,devops            # merge 'base' and 'devops' profiles
