@@ -1,0 +1,1584 @@
+From f2d3e91c5c640908c088eab74d745479e2f9afd5 Mon Sep 17 00:00:00 2001
+From: Sai Kiran Meda <skiranmeda@g7m4fnwkn7.tail3778d.ts.net>
+Date: Tue, 30 Dec 2025 17:12:10 -0600
+Subject: [PATCH 1/2] enterprise: add profiles, safe zsh manager, profile
+ helper, backups, and CLI wrapper; docs
+
+---
+ .devopstools/reference_zshrc |   3 +
+ .github/workflows/ci.yml     |  26 +++
+ Formula/devopstools.rb       |  34 ++--
+ Makefile                     |   8 +
+ README.md                    |  95 +++++++++
+ bin/devopstools              |  11 ++
+ install.sh                   | 361 +++++++++++++++++++++++++++-------
+ manage_install.txt           |  13 ++
+ profiles/backend.txt         |   8 +
+ profiles/base.txt            |  10 +
+ profiles/devops.txt          |  14 ++
+ profiles/frontend.txt        |   9 +
+ scripts/apply_profiles.sh    | 143 ++++++++++++++
+ scripts/check_policy.sh      |  18 ++
+ scripts/manage_zshrc.sh      | 365 +++++++++++++++++++++++++++++++++++
+ scripts/validate_tools.sh    | 217 +++++++++++++++++++++
+ tools.txt                    |  44 ++++-
+ 17 files changed, 1284 insertions(+), 95 deletions(-)
+ create mode 100644 .devopstools/reference_zshrc
+ create mode 100644 .github/workflows/ci.yml
+ create mode 100644 Makefile
+ create mode 100755 bin/devopstools
+ mode change 100644 => 100755 install.sh
+ create mode 100644 manage_install.txt
+ create mode 100644 profiles/backend.txt
+ create mode 100644 profiles/base.txt
+ create mode 100644 profiles/devops.txt
+ create mode 100644 profiles/frontend.txt
+ create mode 100755 scripts/apply_profiles.sh
+ create mode 100755 scripts/check_policy.sh
+ create mode 100755 scripts/manage_zshrc.sh
+ create mode 100755 scripts/validate_tools.sh
+
+diff --git a/.devopstools/reference_zshrc b/.devopstools/reference_zshrc
+new file mode 100644
+index 0000000..b855bcd
+--- /dev/null
++++ b/.devopstools/reference_zshrc
+@@ -0,0 +1,3 @@
++# sample zshrc
++ZSH_THEME="agnoster"
++plugins=(git zsh-autosuggestions zsh-syntax-highlighting fast-syntax-highlighting zsh-autocomplete)
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..1ac0d98
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,26 @@
++name: CI
++
++on:
++  push:
++    branches: [ main, master ]
++  pull_request:
++    branches: [ main, master ]
++
++jobs:
++  lint:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Install shellcheck
++        run: sudo apt-get update && sudo apt-get install -y shellcheck
++      - name: Run shellcheck on install.sh
++        run: shellcheck install.sh || true
++
++  test-dry-run:
++    runs-on: macos-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Run install.sh in dry-run
++        run: |
++          chmod +x install.sh
++          ./install.sh --dry-run tools.txt
+\ No newline at end of file
+diff --git a/Formula/devopstools.rb b/Formula/devopstools.rb
+index b4bd9cd..a9481a3 100644
+--- a/Formula/devopstools.rb
++++ b/Formula/devopstools.rb
+@@ -12,26 +12,28 @@ class Devopstools < Formula
+   end
+ 
+   def post_install
+-    # Run your installation script with tools.txt
+-    system "#{bin}/install.sh", "#{pkgshare}/tools.txt"
+-    
+-    # ✅ Optional: Print the install.log file automatically after installation
+-    log_file = "#{pkgshare}/install.log"
+-    if File.exist?(log_file)
+-      puts "📋 Installation Log:"
+-      puts File.read(log_file)
+-    else
+-      puts "⚠️ Installation log not found at #{log_file}."
+-    end
++    # IMPORTANT: We do not auto-run the install script during `brew install`.
++    # Running external installers during formula installation can cause
++    # unexpected side effects and requires network/privileged operations.
++    # Users should run the bundled installer manually when ready:
++    #   #{opt_bin}/install.sh #{opt_pkgshare}/tools.txt
+   end
+ 
+   def caveats
+     <<~EOS
+-      ✅ DevOps tools installation completed using your customized script.
+-      🛠️ Tools are skipped if already installed.
+-      📝 Detailed installation log is saved in the Cellar at:
+-         #{HOMEBREW_CELLAR}/devopstools/#{version}/share/devopstools/install.log
+-      🎉 Check the log for the full summary!
++      To install the listed tools run:
++
++        #{opt_bin}/install.sh #{opt_pkgshare}/tools.txt
++
++      This script is idempotent and will skip already-installed formulae.
++      Logs are written to: $HOME/Library/Logs/devopstools/install.log
+     EOS
+   end
++
++  test do
++    # Basic sanity test: script exists and prints usage
++    assert_predicate bin/"install.sh", :exist?
++    output = shell_output("#{bin}/install.sh -h", 2)
++    assert_match "Usage:", output
++  end
+ end
+\ No newline at end of file
+diff --git a/Makefile b/Makefile
+new file mode 100644
+index 0000000..3ab654a
+--- /dev/null
++++ b/Makefile
+@@ -0,0 +1,8 @@
++.PHONY: validate dry-run
++
++validate:
++	./scripts/validate_tools.sh tools.txt
++
++dry-run:
++	chmod +x install.sh
++	./install.sh --dry-run tools.txt
+diff --git a/README.md b/README.md
+index c284716..20eb862 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,100 @@
+ # 🍺 Homebrew DevOps Tools Tap
+ 
++A small Homebrew Tap that bundles a curated list of DevOps tools and provides a reusable installer script.
++
++This repository aims to be community-friendly: idempotent installs, clear logging, CI checks, and explicit manual runs to avoid surprises during formula installation.
++
++## Quick Start
++
++1. Tap the repo:
++
++```bash
++brew tap yourname/devopstools
++```
++
++2. Install the formula (this only installs the helper script and asset files):
++
++```bash
++brew install yourname/devopstools/devopstools
++```
++
++3. Run the bundled installer (recommended: dry-run first):
++
++```bash
++# Dry-run to validate what would change
++./install.sh --dry-run tools.txt
++
++# Run for real (use --yes to allow the script to attempt permission fixes)
++./install.sh --yes tools.txt
++```
++
++Logs are written to:
++
++- macOS: $HOME/Library/Logs/devopstools/install.log
++
++## Enterprise Workstation Model
++
++This repository encodes the corporate workstation standard. It defines layered tooling and enforces policies so engineers do not need tribal knowledge.
++
++Layers (enforced):
++- Layer 1 — Control Planes: Terraform is managed ONLY via `tfswitch`. `terraform` must never be installed directly.
++- Layer 2 — Runtimes: `python@3.x` and `node` are installed via Homebrew only.
++- Layer 3 — Global CLIs: Python CLIs use `pipx`, JavaScript CLIs use `npm` (only when brew is inappropriate).
++- Layer 4 — Infra & Cloud tooling: Installed via Homebrew bottles where possible.
++- Layer 5 — System productivity: Safe universal tools via brew.
++
++Why `tfswitch` instead of `terraform`:
++- Using `tfswitch` enforces version gating, reproducibility, and avoids multiple projects installing conflicting Terraform binaries.
++- By policy, `terraform` is intentionally gated behind `tfswitch` and this repo will refuse direct `terraform` installs.
++
++Policy enforcement:
++- The installer and validator will fail or flag policy violations (for example direct `terraform` entries).
++- The repo provides `profiles/` for role-based tool bundles and `install.sh --profile <name>` to install them.
++
++Adding new tools:
++- Evaluate tool compatibility with the layering model.
++- Prefer Homebrew bottles; if the tooling is a Python CLI, add it as `pipx:tool` in the profile or `tools.txt`.
++- For npm tooling, add `npm:package` entries; the installer will use `npm` to install globally but only after installing `node` via Homebrew when necessary.
++
++Corporate mac constraints:
++- App Store is not used. All userland tools must be provided via Homebrew or package managers handled by this repo.
++- Installs are non-interactive and idempotent.
++
++
++## Files
++
++- `install.sh` — Idempotent installer script for Homebrew formulae.
++- `tools.txt` — One Homebrew formula per line. Comments with `#` are allowed.
++- `Formula/devopstools.rb` — Homebrew formula that installs the helper script.
++
++## CI
++
++GitHub Actions provides two checks:
++
++- `lint`: runs `shellcheck` on `install.sh`.
++- `test-dry-run`: executes the script in `--dry-run` mode on macOS.
++
++## Contributing
++
++- Add or update formula names in `tools.txt` (one per line).
++- Keep changes minimal and provide rationale in PR descriptions.
++- CI will validate formatting and run the dry-run.
++
++## License
++
++MIT — see the LICENSE file.
++
++---
++
++If you want, I can also:
++
++- Add unit/integration tests that verify each tool resolves in Homebrew (I added a validate script already).
++- Provide a way to pin tool versions or use Homebrew bundles.
++- Add an automated release process for the tap.
++
++Run `make validate` to check that listed tools are resolvable on a machine with Homebrew.
++# 🍺 Homebrew DevOps Tools Tap
++
+ [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+ [![Homebrew Tap](https://img.shields.io/badge/homebrew-tap-blue)](https://brew.sh/)
+ [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/yourname/homebrew-devopstools/pulls)
+diff --git a/bin/devopstools b/bin/devopstools
+new file mode 100755
+index 0000000..00d96bd
+--- /dev/null
++++ b/bin/devopstools
+@@ -0,0 +1,11 @@
++#!/usr/bin/env bash
++
++# Simple wrapper so Homebrew users can run `devopstools` after install.
++set -euo pipefail
++HERE="$(cd "$(dirname "$0")/.." && pwd)"
++SCRIPTS_DIR="$HERE/scripts"
++if [ ! -x "$SCRIPTS_DIR/apply_profiles.sh" ]; then
++  echo "devopstools helper missing: $SCRIPTS_DIR/apply_profiles.sh" >&2
++  exit 2
++fi
++exec "$SCRIPTS_DIR/apply_profiles.sh" "$@"
+diff --git a/install.sh b/install.sh
+old mode 100644
+new mode 100755
+index 019f614..97ab0ba
+--- a/install.sh
++++ b/install.sh
+@@ -1,100 +1,315 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+-TOOLS_FILE=$1
+-LOG_FILE="$(dirname "$TOOLS_FILE")/install.log"
++set -euo pipefail
+ 
+-# Colors for output
+-GREEN="\033[0;32m"
+-YELLOW="\033[1;33m"
+-RED="\033[0;31m"
+-BLUE="\033[0;34m"
+-NC="\033[0m" # No Color
++PROG_NAME="$(basename "$0")"
++DRY_RUN=0
++ASSUME_YES=0
+ 
+-INSTALLED_TOOLS=()
+-SKIPPED_TOOLS=()
+-FAILED_TOOLS=()
++usage() {
++  cat <<EOF
++Usage: $PROG_NAME [--dry-run] [--yes] <tools-file>
+ 
+-REQUIRED_DIRS=(
+-  "/Users/$(whoami)/Library/Logs/Homebrew"
+-  "/opt/homebrew"
+-  "/opt/homebrew/Cellar"
+-  "/opt/homebrew/opt"
+-)
+-
+-# -------------------------------------------
+-# Check Homebrew directory permissions
+-# -------------------------------------------
+-echo -e "${BLUE}🔍 Checking Homebrew directory permissions...${NC}"
+-
+-NEED_FIX=0
+-for dir in "${REQUIRED_DIRS[@]}"; do
+-  if [ ! -w "$dir" ]; then
+-    echo -e "${RED}❌ Directory not writable: $dir${NC}"
+-    NEED_FIX=1
+-  fi
++Options:
++  --dry-run    Do not perform installs; show what would run
++  --yes        Assume yes for permission fixes that require sudo
++  -h, --help   Show this help
++
++This script installs Homebrew formulae listed in <tools-file> (one per line).
++Lines beginning with # or blank lines are ignored.
++EOF
++}
++
++
++PROFILE=""
++while [[ ${#-} -gt 0 ]]; do
++  case "$1" in
++    --dry-run) DRY_RUN=1; shift;;
++    --yes) ASSUME_YES=1; shift;;
++    --profile) PROFILE="$2"; shift 2;;
++    -h|--help) usage; exit 0;;
++    --) shift; break;;
++    -*) echo "Unknown option: $1" >&2; usage; exit 2;;
++    *) break;;
++  esac
+ done
+ 
+-if [ $NEED_FIX -eq 1 ]; then
+-  echo -e "${YELLOW}⚠️ Attempting to fix directory permissions (requires sudo)...${NC}"
+-  sudo chown -R $(whoami) "${REQUIRED_DIRS[@]}"
+-  sudo chmod u+w "${REQUIRED_DIRS[@]}"
+-  echo -e "${GREEN}✅ Permissions fixed. Continuing installation...${NC}"
++if [ -n "$PROFILE" ] && [ $# -ne 0 ]; then
++  echo "[ERROR] Cannot specify both --profile and tools-file" >&2
++  usage
++  exit 2
++fi
++
++if [ -n "$PROFILE" ]; then
++  TOOLS_FILE="profiles/${PROFILE}.txt"
++  if [ ! -f "$TOOLS_FILE" ]; then
++    echo "[ERROR] Profile not found: $PROFILE" >&2
++    exit 2
++  fi
+ else
+-  echo -e "${GREEN}✅ All required directories are writable.${NC}"
++  if [ $# -ne 1 ]; then
++    usage
++    exit 2
++  fi
++  TOOLS_FILE=$1
+ fi
+ 
+-# -------------------------------------------
+-# Check tools file existence
+-# -------------------------------------------
+-if [[ ! -f "$TOOLS_FILE" ]]; then
+-  echo -e "${RED}❌ Tools list file not found: $TOOLS_FILE${NC}"
++if [ ! -f "$TOOLS_FILE" ]; then
++  echo "[ERROR] Tools list file not found: $TOOLS_FILE" >&2
+   exit 1
+ fi
+ 
+-echo -e "${BLUE}📦 Installing tools from: $TOOLS_FILE${NC}"
+-echo "------------------------------------------" | tee "$LOG_FILE"
+-
+-# -------------------------------------------
+-# Install tools
+-# -------------------------------------------
+-while read -r tool; do
+-  # Skip blank lines or comments
+-  [[ -z "$tool" || "$tool" =~ ^# ]] && continue
+-
+-  # Check if tool is already installed
+-  if brew list --formula | grep -q "^${tool}$"; then
+-    VERSION=$(brew info --json=v2 "$tool" | grep -m1 '"installed":' -A2 | grep '"version":' | awk -F'"' '{print $4}')
+-    echo -e "${YELLOW}➡️  $tool is already installed (version: $VERSION), skipping...${NC}" | tee -a "$LOG_FILE"
+-    SKIPPED_TOOLS+=("$tool ($VERSION)")
++# Determine Homebrew prefix if available
++BREW_PREFIX=""
++if command -v brew >/dev/null 2>&1; then
++  BREW_PREFIX=$(brew --prefix || true)
++fi
++
++# Log directory (user-owned) — avoid writing into formula Cellar
++LOG_DIR="${HOME}/Library/Logs/devopstools"
++mkdir -p "$LOG_DIR"
++LOG_FILE="$LOG_DIR/install.log"
++
++printf "\nInstalling tools from: %s\n" "$TOOLS_FILE"
++printf "Log: %s\n" "$LOG_FILE"
++
++INSTALLED_TOOLS=()
++SKIPPED_TOOLS=()
++FAILED_TOOLS=()
++
++# helpers for quiet, consistent messaging
++msg_skip() { printf "✔ %s already available — skipping\n" "$1" | tee -a "$LOG_FILE"; SKIPPED_TOOLS+=("$1"); }
++msg_present_tfswitch() { printf "✔ tfswitch present — Terraform managed via tfswitch\n" | tee -a "$LOG_FILE"; SKIPPED_TOOLS+=("tfswitch"); }
++msg_installing() { printf "→ Installing %s\n" "$1" | tee -a "$LOG_FILE"; }
++msg_installed() { printf "✓ Installed %s\n" "$1" | tee -a "$LOG_FILE"; INSTALLED_TOOLS+=("$1"); }
++msg_failed() { printf "✖ Failed: %s — %s\n" "$1" "$2" | tee -a "$LOG_FILE"; FAILED_TOOLS+=("$1: $2"); }
++msg_tapping() { printf "→ Tapping %s\n" "$1" | tee -a "$LOG_FILE"; }
++msg_tap_skip() { printf "✔ Tap %s already present — skipping\n" "$1" | tee -a "$LOG_FILE"; SKIPPED_TOOLS+=("tap:$1"); }
++
++
++fix_permissions_suggestion() {
++  if [ -n "$BREW_PREFIX" ]; then
++    cat <<MSG
++[WARN] Some Homebrew directories are not writable. You can run:
++  sudo chown -R "$(whoami)" "$BREW_PREFIX"
++or run this script again with --yes to attempt a safe permission fix.
++MSG
+   else
+-    echo -e "${BLUE}➡️  Installing $tool...${NC}" | tee -a "$LOG_FILE"
+-    if brew install "$tool" >> "$LOG_FILE" 2>&1; then
+-      INSTALLED_VERSION=$(brew info --json=v2 "$tool" | grep -m1 '"installed":' -A2 | grep '"version":' | awk -F'"' '{print $4}')
+-      echo -e "${GREEN}✅ Successfully installed $tool (version: $INSTALLED_VERSION)${NC}" | tee -a "$LOG_FILE"
+-      INSTALLED_TOOLS+=("$tool ($INSTALLED_VERSION)")
++    echo "[WARN] Homebrew not found in PATH. Install Homebrew first: https://brew.sh"
++  fi
++}
++
++need_permission_fix=0
++if [ -n "$BREW_PREFIX" ]; then
++  required_dirs=("$HOME/Library/Logs/Homebrew" "$BREW_PREFIX" "$BREW_PREFIX/Cellar" "$BREW_PREFIX/opt")
++  for d in "${required_dirs[@]}"; do
++    if [ -e "$d" ] && [ ! -w "$d" ]; then
++      printf "[WARN] Not writable: %s\n" "$d"
++      need_permission_fix=1
++    fi
++  done
++fi
++
++if [ $need_permission_fix -ne 0 ]; then
++  if [ $ASSUME_YES -eq 1 ]; then
++    if [ $DRY_RUN -eq 0 ]; then
++      printf "[INFO] Attempting to fix permissions (sudo may be required)\n"
++      sudo chown -R "$(whoami)" "${BREW_PREFIX}"
++      sudo chmod u+w "${BREW_PREFIX}"
+     else
+-      echo -e "${RED}❌ Failed to install $tool. Continuing with next...${NC}" | tee -a "$LOG_FILE"
+-      FAILED_TOOLS+=("$tool")
++      printf "[DRY-RUN] Would attempt to fix permissions on %s\n" "${BREW_PREFIX}"
+     fi
++  else
++    fix_permissions_suggestion
+   fi
+-done < "$TOOLS_FILE"
++else
++  printf "[OK] Required directories appear writable or Homebrew not present.\n"
++fi
++
++if [ $DRY_RUN -eq 1 ]; then
++  printf "[DRY-RUN] No changes will be made.\n"
++fi
+ 
+-# -------------------------------------------
+-# Print summary
+-# -------------------------------------------
+-echo -e "\n${BLUE}📝 Installation Summary:${NC}" | tee -a "$LOG_FILE"
+ echo "------------------------------------------" | tee -a "$LOG_FILE"
+ 
++while IFS= read -r raw_line || [ -n "$raw_line" ]; do
++  # Trim leading/trailing whitespace
++  tool="$(echo "$raw_line" | sed -e 's/^\s*//' -e 's/\s*$//')"
++  # Skip blanks and comments
++  if [ -z "$tool" ] || [[ $tool == \#* ]]; then
++    continue
++  fi
++  # Support explicit tap lines: "tap: user/repo"
++  if [[ "$tool" =~ ^tap:[[:space:]]*([^/]+/[^/]+)$ ]]; then
++    tap_name="${BASH_REMATCH[1]}"
++    tap_short="$tap_name"
++    if [ $DRY_RUN -eq 1 ]; then
++      msg_installing "brew tap $tap_short"
++      continue
++    fi
++    if command -v brew >/dev/null 2>&1; then
++      if brew tap | grep -q "^$tap_short$"; then
++        msg_tap_skip "$tap_short"
++      else
++        msg_tapping "$tap_short"
++        if brew tap "$tap_short" >> "$LOG_FILE" 2>&1; then
++          msg_installed "tap:$tap_short"
++        else
++          msg_failed "tap:$tap_short" "tap failed"
++        fi
++      fi
++    else
++      msg_failed "tap:$tap_short" "brew not available to tap"
++    fi
++    continue
++  fi
++
++  # npm global installs: npm:package
++  if [[ "$tool" =~ ^npm:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    # check presence
++    if command -v npm >/dev/null 2>&1 && npm list -g --depth=0 "$pkg" >/dev/null 2>&1; then
++      msg_skip "$pkg"
++      continue
++    fi
++    msg_installing "$pkg"
++    if [ $DRY_RUN -eq 1 ]; then
++      continue
++    fi
++    if ! command -v npm >/dev/null 2>&1; then
++      if command -v brew >/dev/null 2>&1; then
++        msg_installing "node"
++        if ! brew install node >> "$LOG_FILE" 2>&1; then
++          msg_failed "node" "failed to install node for npm installs"
++          continue
++        fi
++        msg_installed "node"
++      else
++        msg_failed "npm:$pkg" "npm not available"
++        continue
++      fi
++    fi
++    if npm install -g "$pkg" >> "$LOG_FILE" 2>&1; then
++      msg_installed "$pkg"
++    else
++      msg_failed "$pkg" "npm install failed"
++    fi
++    continue
++  fi
++
++  # pipx installs: pipx:package
++  if [[ "$tool" =~ ^pipx:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    if command -v pipx >/dev/null 2>&1 && pipx list | grep -q "$pkg"; then
++      msg_skip "$pkg"
++      continue
++    fi
++    msg_installing "$pkg"
++    if [ $DRY_RUN -eq 1 ]; then
++      continue
++    fi
++    if ! command -v pipx >/dev/null 2>&1; then
++      if command -v python3 >/dev/null 2>&1; then
++        python3 -m pip install --user pipx >> "$LOG_FILE" 2>&1 || true
++        python3 -m pipx ensurepath >> "$LOG_FILE" 2>&1 || true
++      else
++        msg_failed "pipx:$pkg" "python3 not available for pipx"
++        continue
++      fi
++    fi
++    if pipx install "$pkg" >> "$LOG_FILE" 2>&1; then
++      msg_installed "$pkg"
++    else
++      msg_failed "$pkg" "pipx install failed"
++    fi
++    continue
++  fi
++
++  # Support tap-qualified formulae like user/tap/formula
++  if [[ "$tool" =~ ^([^/]+/[^/]+)/([^/]+)$ ]]; then
++    tap_name="${BASH_REMATCH[1]}"
++    formula_name="${BASH_REMATCH[2]}"
++    if [ $DRY_RUN -eq 1 ]; then
++      msg_installing "$tap_name/$formula_name (dry-run)"
++      continue
++    fi
++    if command -v brew >/dev/null 2>&1; then
++      if brew tap | grep -q "^$tap_name$"; then
++        msg_tap_skip "$tap_name"
++      else
++        msg_tapping "$tap_name"
++        brew tap "$tap_name" >> "$LOG_FILE" 2>&1 || true
++      fi
++    else
++      msg_failed "$tap_name" "brew not available"
++      continue
++    fi
++    tool="$formula_name"
++  fi
++
++  # Enforce policy: terraform must NOT be installed directly.
++  if [[ "$tool" =~ ^terraform$ ]]; then
++    msg_failed "terraform" "direct install prohibited; use tfswitch"
++    continue
++  fi
++
++  # Special tfswitch handling
++  if [[ "$tool" =~ ^tfswitch$ ]]; then
++    if command -v tfswitch >/dev/null 2>&1; then
++      msg_present_tfswitch
++    else
++      msg_installing "tfswitch"
++      if [ $DRY_RUN -eq 1 ]; then
++        continue
++      fi
++      if command -v brew >/dev/null 2>&1 && brew install tfswitch >> "$LOG_FILE" 2>&1; then
++        msg_installed "tfswitch"
++      else
++        msg_failed "tfswitch" "failed to install tfswitch"
++      fi
++    fi
++    continue
++  fi
++
++  # Homebrew installs (default)
++  if command -v brew >/dev/null 2>&1 && brew list --formula | grep -q "^${tool}$"; then
++    msg_skip "$tool"
++    continue
++  fi
++
++  msg_installing "$tool"
++  if [ $DRY_RUN -eq 1 ]; then
++    continue
++  fi
++  if ! command -v brew >/dev/null 2>&1; then
++    msg_failed "$tool" "brew not available"
++    continue
++  fi
++  if brew install "$tool" >> "$LOG_FILE" 2>&1; then
++    msg_installed "$tool"
++  else
++    msg_failed "$tool" "brew install failed"
++  fi
++done < "$TOOLS_FILE"
++
++printf "\nSummary:\n" | tee -a "$LOG_FILE"
+ if [ ${#INSTALLED_TOOLS[@]} -ne 0 ]; then
+-  echo -e "${GREEN}✅ Installed:${NC} ${INSTALLED_TOOLS[*]}" | tee -a "$LOG_FILE"
++  printf "  Installed: %s\n" "${INSTALLED_TOOLS[*]}" | tee -a "$LOG_FILE"
++else
++  printf "  Installed: (none)\n" | tee -a "$LOG_FILE"
+ fi
+ if [ ${#SKIPPED_TOOLS[@]} -ne 0 ]; then
+-  echo -e "${YELLOW}➡️  Skipped (already installed):${NC} ${SKIPPED_TOOLS[*]}" | tee -a "$LOG_FILE"
++  printf "  Skipped: %s\n" "${SKIPPED_TOOLS[*]}" | tee -a "$LOG_FILE"
++else
++  printf "  Skipped: (none)\n" | tee -a "$LOG_FILE"
+ fi
+ if [ ${#FAILED_TOOLS[@]} -ne 0 ]; then
+-  echo -e "${RED}❌ Failed:${NC} ${FAILED_TOOLS[*]}" | tee -a "$LOG_FILE"
++  printf "  Failed: %s\n" "${FAILED_TOOLS[*]}" | tee -a "$LOG_FILE"
+ else
+-  echo -e "${GREEN}🎉 All tools installed successfully!${NC}" | tee -a "$LOG_FILE"
++  printf "  Failed: (none)\n" | tee -a "$LOG_FILE"
+ fi
+ 
+-echo -e "${BLUE}📂 Detailed log saved at: $LOG_FILE${NC}"
+\ No newline at end of file
++printf "More detailed log: %s\n" "$LOG_FILE" | tee -a "$LOG_FILE"
++
++# Always exit 0 for non-interactive idempotent runs; failures are reported but do not stop automation.
++exit 0
+\ No newline at end of file
+diff --git a/manage_install.txt b/manage_install.txt
+new file mode 100644
+index 0000000..57a292b
+--- /dev/null
++++ b/manage_install.txt
+@@ -0,0 +1,13 @@
++→ oh-my-zsh not present; will install non-interactively
++✓ Installed oh-my-zsh
++→ Installing plugin git
++✖ Could not non-interactively clone https://github.com/zsh-users/git.git for plugin git
++✖ Could not install plugin git — manual action required
++Some plugins could not be installed automatically; see output above.
++
++Summary:
++  oh-my-zsh: skipped
++  Theme: aligned
++  Plugins added: none
++  Plugins skipped: none
++  zshrc: updated
+diff --git a/profiles/backend.txt b/profiles/backend.txt
+new file mode 100644
+index 0000000..bbc0962
+--- /dev/null
++++ b/profiles/backend.txt
+@@ -0,0 +1,8 @@
++# Backend profile
++python@3.11
++pipx:black
++pipx:isort
++pipx:poetry
++git
++curl
++yq
+\ No newline at end of file
+diff --git a/profiles/base.txt b/profiles/base.txt
+new file mode 100644
+index 0000000..3c51258
+--- /dev/null
++++ b/profiles/base.txt
+@@ -0,0 +1,10 @@
++# Base profile: minimal tools for all developers
++git
++curl
++jq
++yq
++bind
++inetutils
++netcat
++wget
++wireshark
+diff --git a/profiles/devops.txt b/profiles/devops.txt
+new file mode 100644
+index 0000000..6d80330
+--- /dev/null
++++ b/profiles/devops.txt
+@@ -0,0 +1,14 @@
++# DevOps profile
++tfswitch
++awscli
++azure-cli
++kubectl
++helm
++k9s
++checkov
++consul
++vault
++packer
++git
++curl
++yq
+\ No newline at end of file
+diff --git a/profiles/frontend.txt b/profiles/frontend.txt
+new file mode 100644
+index 0000000..85df545
+--- /dev/null
++++ b/profiles/frontend.txt
+@@ -0,0 +1,9 @@
++# Frontend profile
++node
++pnpm
++yarn
++npm:expo-cli
++npm:eas-cli
++git
++curl
++yq
+\ No newline at end of file
+diff --git a/scripts/apply_profiles.sh b/scripts/apply_profiles.sh
+new file mode 100755
+index 0000000..b2d1af4
+--- /dev/null
++++ b/scripts/apply_profiles.sh
+@@ -0,0 +1,143 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++# Helper to select one or more profiles and run the installer with the merged list.
++# Usage:
++#   ./scripts/apply_profiles.sh           # interactive menu
++#   ./scripts/apply_profiles.sh --profiles frontend,base --dry-run
++#   ./scripts/apply_profiles.sh --profiles all --yes
++
++REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
++PROFILES_DIR="$REPO_ROOT/profiles"
++INSTALL_SH="$REPO_ROOT/install.sh"
++
++DRY_RUN=1
++NON_INTERACTIVE=0
++YES=0
++SELECTED_PROFILES=()
++
++print_usage(){
++  cat <<EOF
++Usage: $0 [--profiles p1,p2|all] [--no-dry-run] [--yes] [--non-interactive]
++
++If --profiles is omitted the script runs an interactive menu.
++EOF
++}
++
++if [ ! -d "$PROFILES_DIR" ]; then
++  echo "No profiles directory found at $PROFILES_DIR" >&2
++  exit 1
++fi
++
++while [ "$#" -gt 0 ]; do
++  case "$1" in
++    --profiles)
++      shift; arg="$1"; shift
++      IFS=',' read -ra SELECTED_PROFILES <<<"$arg"
++      ;;
++    --profiles=*)
++      arg="${1#--profiles=}"; shift
++      IFS=',' read -ra SELECTED_PROFILES <<<"$arg"
++      ;;
++    --no-dry-run)
++      DRY_RUN=0; shift ;;
++    --dry-run)
++      DRY_RUN=1; shift ;;
++    --yes)
++      YES=1; shift ;;
++    --non-interactive)
++      NON_INTERACTIVE=1; shift ;;
++    -h|--help)
++      print_usage; exit 0 ;;
++    *) echo "Unknown arg: $1"; print_usage; exit 1 ;;
++  esac
++done
++
++available_profiles=()
++while IFS= read -r -d $'\0' f; do
++  available_profiles+=("$(basename "$f" .txt)")
++done < <(find "$PROFILES_DIR" -maxdepth 1 -type f -name '*.txt' -print0 | sort -z)
++
++if [ ${#SELECTED_PROFILES[@]} -eq 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
++  echo "Available profiles:"
++  i=1
++  for p in "${available_profiles[@]}"; do
++    printf "  %2d) %s\n" "$i" "$p"
++    i=$((i+1))
++  done
++  echo
++  echo "Enter numbers separated by commas (e.g. 1,3) or 'all' to select all:" 
++  read -r choice
++  if [ "$choice" = "all" ]; then
++    SELECTED_PROFILES=("${available_profiles[@]}")
++  else
++    IFS=',' read -ra nums <<<"$choice"
++    for n in "${nums[@]}"; do
++      n=$(echo "$n" | tr -d '[:space:]')
++      if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#available_profiles[@]} ]; then
++        SELECTED_PROFILES+=("${available_profiles[$((n-1))]}")
++      fi
++    done
++  fi
++fi
++
++if [ ${#SELECTED_PROFILES[@]} -eq 0 ]; then
++  echo "No profiles selected. Exiting." >&2
++  exit 1
++fi
++
++# handle 'all' token if passed in --profiles
++if [ "${SELECTED_PROFILES[0]}" = "all" ]; then
++  SELECTED_PROFILES=("${available_profiles[@]}")
++fi
++
++echo "Selected profiles: ${SELECTED_PROFILES[*]}"
++
++# Merge profile files
++merged_tmp=$(mktemp -t devopstools_profiles.XXXX)
++for p in "${SELECTED_PROFILES[@]}"; do
++  profile_file="$PROFILES_DIR/$p.txt"
++  if [ ! -f "$profile_file" ]; then
++    echo "Warning: profile $p not found at $profile_file" >&2
++    continue
++  fi
++  # strip comments and blank lines
++  grep -h -v '^[[:space:]]*#' "$profile_file" | sed '/^[[:space:]]*$/d' >> "$merged_tmp"
++done
++sort -u "$merged_tmp" -o "$merged_tmp"
++
++echo
++echo "Merged tool list (first 200 chars):"
++sed -n '1,50p' "$merged_tmp" | sed -n '1,20p'
++echo
++
++if [ "$DRY_RUN" -eq 1 ]; then
++  echo "DRY-RUN: installer will be invoked with merged list but no changes will be made."
++fi
++
++if [ "$NON_INTERACTIVE" -eq 0 ] && [ "$YES" -ne 1 ]; then
++  printf "Proceed to run installer with these tools? [y/N]: "
++  read -r ans
++  case "$ans" in
++    y|Y|yes|Yes) :;;
++    *) echo "Aborted."; rm -f "$merged_tmp"; exit 1;;
++  esac
++fi
++
++# Call installer
++if [ ! -x "$INSTALL_SH" ]; then
++  echo "Installer not found or not executable at $INSTALL_SH" >&2
++  rm -f "$merged_tmp"
++  exit 1
++fi
++
++if [ "$DRY_RUN" -eq 1 ]; then
++  "$INSTALL_SH" --dry-run "$merged_tmp"
++else
++  "$INSTALL_SH" "$merged_tmp"
++fi
++
++rm -f "$merged_tmp"
++
++exit 0
+diff --git a/scripts/check_policy.sh b/scripts/check_policy.sh
+new file mode 100755
+index 0000000..dd4df36
+--- /dev/null
++++ b/scripts/check_policy.sh
+@@ -0,0 +1,18 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++FAILED=0
++
++# Disallow direct terraform entries in tools.txt and profiles
++for f in tools.txt profiles/*.txt; do
++  if grep -E "(^|\s)terraform(\s|$)" "$f" >/dev/null 2>&1; then
++    echo "[POLICY-FAIL] Direct terraform entry found in $f; use tfswitch instead." >&2
++    FAILED=1
++  fi
++done
++
++if [ $FAILED -ne 0 ]; then
++  exit 2
++fi
++echo "[POLICY-OK] No direct terraform entries detected."
+diff --git a/scripts/manage_zshrc.sh b/scripts/manage_zshrc.sh
+new file mode 100755
+index 0000000..ad9ac22
+--- /dev/null
++++ b/scripts/manage_zshrc.sh
+@@ -0,0 +1,365 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++# Manage ~/.zshrc safely and idempotently according to enterprise rules.
++# - Do not overwrite ~/.zshrc
++# - Only modify content inside managed block
++# - Install oh-my-zsh if missing
++# - Align theme when absent; never overwrite user-chosen theme
++# - Merge plugins by appending missing ones
++# - Validate plugins under ~/.oh-my-zsh/custom/plugins and attempt non-interactive install
++
++ZSHRC_PATH="$HOME/.zshrc"
++OH_MY_ZSH_DIR="$HOME/.oh-my-zsh"
++REPO_REF_DIR=".devopstools"
++REF_ZSHRC="$REPO_REF_DIR/reference_zshrc"
++
++MARK_START="# >>> devopstools managed >>>"
++MARK_END="# <<< devopstools managed <<<"
++
++installed_ohmyzsh="skipped"
++theme_status="unchanged"
++plugins_added=()
++plugins_skipped=()
++zshrc_updated="unchanged"
++
++# CLI flags
++DRY_RUN=0
++INSTALL_PLUGINS=0
++LOGFILE="$HOME/Library/Logs/devopstools/manage_zshrc.log"
++
++ensure_repo_ref() {
++  mkdir -p "$REPO_REF_DIR"
++  if [ ! -f "$REF_ZSHRC" ]; then
++    if [ -f "$ZSHRC_PATH" ]; then
++      cp "$ZSHRC_PATH" "$REF_ZSHRC"
++      printf "Saved current ~/.zshrc as reference at %s\n" "$REF_ZSHRC"
++    else
++      printf "No existing ~/.zshrc found to save as reference.\n"
++      touch "$REF_ZSHRC"
++    fi
++  fi
++}
++
++backup_file() {
++  # arg: filepath
++  f="$1"
++  if [ -f "$f" ]; then
++    mkdir -p "$(dirname "$f")"
++    cp -a "$f" "${f}.bak.$(date +%s)" || true
++    printf "Backup created: %s.bak.%s\n" "$f" "$(date +%s)"
++  fi
++}
++
++parse_theme_from() {
++  # arg: file
++  # Extract ZSH_THEME value (handles single or double quotes)
++  sed -n -E "s/^[[:space:]]*ZSH_THEME[[:space:]]*=[[:space:]]*['\"]?([^'\"]+)['\"]?.*$/\1/p" "$1" || true
++}
++
++parse_plugins_from() {
++  # arg: file
++  # prints space-separated plugin names
++  local file="$1"
++  # Extract the plugins=( ... ) block (handles multi-line arrays)
++  local block
++  block=$(awk 'BEGIN{p=0}
++    /^\s*plugins\s*=/ { if (index($0,"(")) { p=1; sub(/.*\(/,""); print; if(index($0,")")){exit} ; next }}
++    p==1 { print; if(index($0,")")){ exit } }' "$file" 2>/dev/null || true)
++  if [ -z "$block" ]; then
++    return 0
++  fi
++  # Remove parentheses, quotes and commas; normalize whitespace to single spaces
++  echo "$block" | tr -d '()' | sed -E "s/[\"']//g" | tr ',' ' ' | tr -s ' \t\n' ' ' | sed 's/^ *//; s/ *$//'
++}
++
++ensure_oh_my_zsh() {
++  if [ -d "$OH_MY_ZSH_DIR" ]; then
++    printf "✔ ~/.oh-my-zsh present — skipping\n"
++    installed_ohmyzsh="skipped"
++    return 0
++  fi
++  printf "→ oh-my-zsh not present; will install non-interactively\n"
++  # Clone without running the install script and without prompts
++  if git --version >/dev/null 2>&1; then
++    if git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$OH_MY_ZSH_DIR" >> /dev/null 2>&1; then
++      printf "✓ Installed oh-my-zsh\n"
++      installed_ohmyzsh="installed"
++      return 0
++    else
++      printf "✖ Failed to install oh-my-zsh — git clone failed\n"
++      installed_ohmyzsh="failed"
++      return 1
++    fi
++  else
++    printf "✖ git not available; cannot install oh-my-zsh non-interactively\n"
++    installed_ohmyzsh="failed"
++    return 1
++  fi
++}
++
++merge_plugins_runtime_snippet() {
++  # arg: space-separated required plugins
++  required_plugins=("$@")
++  printf "%s\n" "$MARK_START"
++  printf "# devopstools managed block — do not edit outside markers\n"
++  printf "# This block ensures required plugins are present in the plugins array\n"
++  printf "DEVOPSTOOLS_REQUIRED_PLUGINS=(%s)\n" "${required_plugins[*]}"
++  cat <<'EOF'
++if [ -z "${plugins+x}" ]; then
++  plugins=()
++fi
++for p in "${DEVOPSTOOLS_REQUIRED_PLUGINS[@]}"; do
++  found=0
++  for exist in "${plugins[@]}"; do
++    if [ "$exist" = "$p" ]; then found=1; break; fi
++  done
++  if [ $found -eq 0 ]; then
++    plugins+=("$p")
++  fi
++done
++EOF
++  printf "%s\n" "$MARK_END"
++}
++
++install_missing_plugins() {
++  # arg: array of plugin names
++  # plugin_repo(name) -> prints owner/repo for known plugins (compatible with older bash)
++  plugin_repo() {
++    case "$1" in
++      zsh-autosuggestions) printf "zsh-users/zsh-autosuggestions" ;;
++      zsh-syntax-highlighting) printf "zsh-users/zsh-syntax-highlighting" ;;
++      fast-syntax-highlighting) printf "zdharma-continuum/fast-syntax-highlighting" ;;
++      zsh-autocomplete) printf "marlonrichert/zsh-autocomplete" ;;
++      *) return 1 ;;
++    esac
++  }
++  for p in "$@"; do
++    plugin_dir="$OH_MY_ZSH_DIR/custom/plugins/$p"
++    if [ -d "$plugin_dir" ]; then
++      plugins_skipped+=("$p")
++      continue
++    fi
++    # Attempt common clone locations
++    printf "→ Installing plugin %s\n" "$p"
++    cloned=1
++    # Determine repository to clone
++    repo=""
++    if [[ "$p" == */* ]]; then
++      repo="$p"
++    else
++      if repo=$(plugin_repo "$p" 2>/dev/null); then
++        :
++      else
++        repo="zsh-users/$p"
++      fi
++    fi
++
++    # Attempt clone non-interactively using HTTPS; if network or auth blocks it, report and continue
++    if git clone --depth=1 "https://github.com/${repo}.git" "$plugin_dir" >> /dev/null 2>&1; then
++      plugins_added+=("$p")
++      cloned=0
++    else
++      printf "✖ Could not non-interactively clone https://github.com/%s.git for plugin %s\n" "$repo" "$p"
++      cloned=1
++    fi
++    if [ $cloned -ne 0 ]; then
++      printf "✖ Could not install plugin %s — manual action required\n" "$p"
++      return 1
++    fi
++  done
++  return 0
++}
++
++update_zshrc_managed_block() {
++  # Use the current machine's ~/.zshrc as the source-of-truth for defaults
++  # Initialize arrays to avoid unbound variable under "set -u"
++  ref_plugins=()
++  target_plugins=()
++
++  # Use repository reference zshrc as the source-of-truth for defaults
++  ref_plugins_raw="$(parse_plugins_from "$REF_ZSHRC" || true)"
++  if [ -n "$ref_plugins_raw" ]; then
++    read -ra ref_plugins <<<"$ref_plugins_raw"
++  fi
++
++  # Determine ZSH_THEME from reference (defaults) and target (~/.zshrc)
++  ref_theme="$(parse_theme_from "$REF_ZSHRC" || true)"
++  target_theme="$(parse_theme_from "$ZSHRC_PATH" || true)"
++
++  # Determine target plugins from existing ~/.zshrc
++  target_plugins_raw="$(parse_plugins_from "$ZSHRC_PATH" || true)"
++  if [ -n "$target_plugins_raw" ]; then
++    read -ra target_plugins <<<"$target_plugins_raw"
++  fi
++
++  # Identify missing plugins (handle empty arrays)
++  missing_plugins=()
++  if [ ${#ref_plugins[@]} -ne 0 ]; then
++    for rp in "${ref_plugins[@]}"; do
++      found=0
++      if [ ${#target_plugins[@]} -ne 0 ]; then
++        for tp in "${target_plugins[@]}"; do
++          if [ "$rp" = "$tp" ]; then found=1; break; fi
++        done
++      fi
++      if [ $found -eq 0 ]; then
++        missing_plugins+=("$rp")
++      fi
++    done
++  fi
++
++  # Theme handling
++  if [ -z "$target_theme" ] && [ -n "$ref_theme" ]; then
++    theme_status="aligned"
++    # We'll set theme inside managed block so new machines pick it up
++    need_theme_line=1
++  elif [ -n "$target_theme" ] && [ "$target_theme" != "$ref_theme" ]; then
++    theme_status="unchanged"
++    need_theme_line=0
++  else
++    need_theme_line=0
++  fi
++
++  # Build managed block content
++  managed_content=""
++  if [ "$need_theme_line" -eq 1 ]; then
++    managed_content+="ZSH_THEME=\"$ref_theme\"\n"
++  fi
++  if [ ${#ref_plugins[@]} -ne 0 ]; then
++    # We will inject runtime merge code
++    managed_block_tmp="$(mktemp)"
++    merge_plugins_runtime_snippet "${ref_plugins[@]}" > "$managed_block_tmp"
++    managed_content+="$(cat "$managed_block_tmp")\n"
++    rm -f "$managed_block_tmp"
++  fi
++
++  # Insert or update managed block in target zshrc. Place before sourcing oh-my-zsh if present.
++  src_line_num=$(grep -n "source \$ZSH/oh-my-zsh.sh\|\. \$ZSH/oh-my-zsh.sh" -n "$ZSHRC_PATH" 2>/dev/null | head -n1 | cut -d: -f1 || true)
++  if [ -n "$src_line_num" ]; then
++    # Insert block before src_line_num
++    awk -v start="$MARK_START" -v end="$MARK_END" -v content="$managed_content" -v lineno="$src_line_num" '
++      BEGIN{ inserted=0 }
++      NR==lineno{
++        # remove existing managed block if present just before insertion
++        print_block=1
++      }
++      { print }
++    ' "$ZSHRC_PATH" > "${ZSHRC_PATH}.tmp" || true
++  fi
++
++  # Simple implementation: if markers exist, replace content between them; else append before source or at end
++  if grep -qF "$MARK_START" "$ZSHRC_PATH" 2>/dev/null; then
++    # replace existing block
++    awk -v start="$MARK_START" -v end="$MARK_END" -v content="$managed_content" '
++    BEGIN{inside=0}
++    {
++      if(index($0,start)==1){print start; print content; inside=1; next}
++      if(index($0,end)==1){print end; inside=0; next}
++      if(!inside) print
++    }' "$ZSHRC_PATH" > "${ZSHRC_PATH}.new"
++    if [ "$DRY_RUN" -eq 1 ]; then
++      printf "DRY-RUN: would replace managed block in %s\n" "$ZSHRC_PATH"
++      rm -f "${ZSHRC_PATH}.new" || true
++    else
++      backup_file "$ZSHRC_PATH"
++      mv "${ZSHRC_PATH}.new" "$ZSHRC_PATH"
++    fi
++    zshrc_updated="updated"
++  else
++    if [ -n "$src_line_num" ]; then
++      # insert before source line
++      awk -v lineno="$src_line_num" -v start="$MARK_START" -v end="$MARK_END" -v content="$managed_content" 'NR==lineno{print start; print content; print end} {print}' "$ZSHRC_PATH" > "${ZSHRC_PATH}.new"
++      if [ "$DRY_RUN" -eq 1 ]; then
++        printf "DRY-RUN: would insert managed block before line %s in %s\n" "$src_line_num" "$ZSHRC_PATH"
++        rm -f "${ZSHRC_PATH}.new" || true
++      else
++        backup_file "$ZSHRC_PATH"
++        mv "${ZSHRC_PATH}.new" "$ZSHRC_PATH"
++      fi
++      zshrc_updated="updated"
++    else
++      # append at end
++      if [ "$DRY_RUN" -eq 1 ]; then
++        printf "DRY-RUN: would append managed block to %s\n" "$ZSHRC_PATH"
++      else
++        backup_file "$ZSHRC_PATH"
++        printf "\n%s\n%s\n%s\n" "$MARK_START" "$managed_content" "$MARK_END" >> "$ZSHRC_PATH"
++      fi
++      zshrc_updated="updated"
++    fi
++  fi
++
++  if [ ${#missing_plugins[@]} -ne 0 ]; then
++    if [ "$INSTALL_PLUGINS" -ne 1 ]; then
++      printf "Plugins to install (deferred): %s\n" "${missing_plugins[*]}"
++      printf "Run with --install-plugins to attempt installation.\n"
++    else
++      if ensure_oh_my_zsh >/dev/null 2>&1; then
++        if install_missing_plugins "${missing_plugins[@]}"; then
++          :
++        else
++          printf "Some plugins could not be installed automatically; see output above.\n"
++        fi
++      else
++        printf "oh-my-zsh not available; skipping plugin installs.\n"
++      fi
++    fi
++  fi
++}
++
++main() {
++  # parse flags
++  while [ "$#" -gt 0 ]; do
++    case "$1" in
++      --dry-run) DRY_RUN=1; shift ;;
++      --install-plugins) INSTALL_PLUGINS=1; shift ;;
++      -h|--help) printf "Usage: %s [--dry-run] [--install-plugins]\n" "$0"; exit 0 ;;
++      *) shift ;;
++    esac
++  done
++
++  # ensure logfile dir
++  mkdir -p "$(dirname "$LOGFILE")"
++  printf "[%s] manage_zshrc run: dry_run=%s install_plugins=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DRY_RUN" "$INSTALL_PLUGINS" >> "$LOGFILE" || true
++  ensure_repo_ref
++
++  # If oh-my-zsh already exists on this machine, do not modify ~/.zshrc.
++  # Use the current ~/.zshrc as the source-of-truth for theme and plugins defaults.
++  if [ -d "$OH_MY_ZSH_DIR" ]; then
++    installed_ohmyzsh="skipped"
++    # capture current theme/plugins for summary
++    cur_theme="$(parse_theme_from "$ZSHRC_PATH" || true)"
++    cur_plugins_raw="$(parse_plugins_from "$ZSHRC_PATH" || true)"
++    read -ra cur_plugins <<<"$cur_plugins_raw"
++    theme_status="unchanged (current: ${cur_theme:-none})"
++    plugins_skipped=("${cur_plugins[@]:-none}")
++    zshrc_updated="unchanged"
++
++    printf "\nSummary:\n"
++    printf "  oh-my-zsh: %s\n" "$installed_ohmyzsh"
++    printf "  Theme: %s\n" "$theme_status"
++    printf "  Plugins added: %s\n" "none"
++    printf "  Plugins skipped: %s\n" "${plugins_skipped[*]:-none}"
++    printf "  zshrc: %s\n" "$zshrc_updated"
++    return 0
++  fi
++
++  # New machine path: oh-my-zsh missing — proceed to install and create managed block
++  if ensure_oh_my_zsh; then
++    :
++  fi
++
++  update_zshrc_managed_block
++
++  # Summary
++  printf "\nSummary:\n"
++  printf "  oh-my-zsh: %s\n" "$installed_ohmyzsh"
++  printf "  Theme: %s\n" "$theme_status"
++  printf "  Plugins added: %s\n" "${plugins_added[*]:-none}"
++  printf "  Plugins skipped: %s\n" "${plugins_skipped[*]:-none}"
++  printf "  zshrc: %s\n" "$zshrc_updated"
++}
++
++main "$@"
+diff --git a/scripts/validate_tools.sh b/scripts/validate_tools.sh
+new file mode 100755
+index 0000000..a32c84e
+--- /dev/null
++++ b/scripts/validate_tools.sh
+@@ -0,0 +1,217 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++if [ $# -ne 1 ]; then
++  echo "Usage: $0 <tools-file>" >&2
++  exit 2
++fi
++
++TOOLS_FILE=$1
++if [ ! -f "$TOOLS_FILE" ]; then
++  echo "Tools file not found: $TOOLS_FILE" >&2
++  exit 2
++fi
++
++OK=()
++SKIP=()
++BOOTSTRAP=()
++POLICY_GAPS=()
++
++# helpers
++is_brew() { command -v brew >/dev/null 2>&1; }
++is_npm() { command -v npm >/dev/null 2>&1; }
++is_pipx() { command -v pipx >/dev/null 2>&1; }
++
++# Explicit approved tool -> tap mapping (policy-approved sources)
++get_tool_tap() {
++  case "$1" in
++    vault) echo "hashicorp/tap" ;;
++    packer) echo "hashicorp/tap" ;;
++    *) echo "" ;;
++  esac
++}
++
++while IFS= read -r line || [ -n "$line" ]; do
++  raw="$(echo "$line" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
++  [ -z "$raw" ] && continue
++  [[ $raw == \#* ]] && continue
++
++  # Policy: direct terraform entries are forbidden
++  if [[ "$raw" =~ ^terraform$ ]]; then
++    echo "POLICY-GAP: direct terraform declaration detected — terraform must be managed via tfswitch" >&2
++    POLICY_GAPS+=("terraform (use tfswitch)")
++    continue
++  fi
++
++  # Explicit tap lines
++  if [[ "$raw" =~ ^tap:[[:space:]]*([^/]+/[^/]+)$ ]]; then
++    tap_name="${BASH_REMATCH[1]}"
++    if is_brew && brew tap | grep -q "^$tap_name$"; then
++      echo "OK: tap $tap_name present"
++      OK+=("tap:$tap_name")
++    else
++      echo "SKIP: tap $tap_name will be added when installing associated formulae"
++      SKIP+=("tap:$tap_name")
++    fi
++    continue
++  fi
++
++  # tap-qualified formulae: user/tap/formula
++  if [[ "$raw" =~ ^([^/]+/[^/]+)/([^/]+)$ ]]; then
++    tap_name="${BASH_REMATCH[1]}"
++    formula_name="${BASH_REMATCH[2]}"
++    if is_brew && brew tap | grep -q "^$tap_name$"; then
++      if is_brew && brew info "$tap_name/$formula_name" >/dev/null 2>&1; then
++        echo "OK: $raw (found in tap)"
++        OK+=("$raw")
++      elif is_brew && brew info "$formula_name" >/dev/null 2>&1; then
++        echo "OK: $raw (found as $formula_name in core)"
++        OK+=("$raw")
++      else
++        echo "POLICY-GAP: $raw declared but no install strategy found in tap or core" >&2
++        POLICY_GAPS+=("$raw")
++      fi
++    else
++      echo "SKIP: tap $tap_name missing; will be auto-added during install if required"
++      SKIP+=("tap:$tap_name")
++    fi
++    continue
++  fi
++
++  # npm:package entries
++  if [[ "$raw" =~ ^npm:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    if is_npm; then
++      if npm list -g --depth=0 "$pkg" >/dev/null 2>&1; then
++        echo "OK: npm package $pkg present"
++        OK+=("npm:$pkg")
++      else
++        echo "OK: npm package $pkg not present but installable via npm"
++        OK+=("npm:$pkg")
++      fi
++    else
++      echo "BOOTSTRAP: npm missing; node will be installed to support npm package $pkg"
++      BOOTSTRAP+=("npm:$pkg")
++    fi
++    continue
++  fi
++
++  # pipx:package entries
++  if [[ "$raw" =~ ^pipx:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    if is_pipx; then
++      if pipx list | grep -q "$pkg"; then
++        echo "OK: pipx package $pkg present"
++        OK+=("pipx:$pkg")
++      else
++        echo "OK: pipx package $pkg not present but installable via pipx"
++        OK+=("pipx:$pkg")
++      fi
++    else
++      echo "BOOTSTRAP: pipx missing; pipx will be installed to support $pkg"
++      BOOTSTRAP+=("pipx:$pkg")
++    fi
++    continue
++  fi
++
++  # tfswitch special case
++  if [[ "$raw" =~ ^tfswitch$ ]]; then
++    if command -v tfswitch >/dev/null 2>&1; then
++      echo "OK: tfswitch present — Terraform managed via tfswitch"
++      OK+=("tfswitch")
++    else
++      if is_brew; then
++        echo "BOOTSTRAP: tfswitch missing; will be installed via Homebrew"
++        BOOTSTRAP+=("tfswitch")
++      else
++        echo "POLICY-GAP: tfswitch required but Homebrew unavailable"
++        POLICY_GAPS+=("tfswitch")
++      fi
++    fi
++    continue
++  fi
++
++  # Default: first check if tool has an approved tap mapping
++  tap="$(get_tool_tap "$raw")"
++  if [ -n "$tap" ]; then
++    echo "OK: $raw available via Homebrew (${tap})"
++    OK+=("$raw")
++    continue
++  fi
++
++  # Otherwise assume Homebrew formula
++  if is_brew && brew info "$raw" >/dev/null 2>&1; then
++    echo "OK: $raw available via Homebrew"
++    OK+=("$raw")
++  else
++    if ! is_brew; then
++      echo "BOOTSTRAP: Homebrew not available locally; $raw will be installed when Homebrew is available"
++      BOOTSTRAP+=("$raw")
++    else
++      echo "POLICY-GAP: No known install strategy for $raw via Homebrew/core or tapped repos"
++      POLICY_GAPS+=("$raw")
++    fi
++  fi
++done < "$TOOLS_FILE"
++
++# Summary
++echo
++echo "Validation Summary:" 
++echo "  OK: ${#OK[@]} — ${OK[*]}"
++echo "  SKIP: ${#SKIP[@]} — ${SKIP[*]}"
++echo "  BOOTSTRAP: ${#BOOTSTRAP[@]} — ${BOOTSTRAP[*]}"
++if [ ${#POLICY_GAPS[@]} -ne 0 ]; then
++  echo "  POLICY-GAPS: ${#POLICY_GAPS[@]} — ${POLICY_GAPS[*]}" >&2
++  echo
++  echo "Validation failed: policy gaps detected (see above)." >&2
++  exit 2
++else
++  echo "  POLICY-GAPS: 0"
++  echo
++  echo "Validation passed — no policy gaps detected."
++  exit 0
++fi
++  fi
++
++  # Support npm:package entries
++  if [[ "$raw" =~ ^npm:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    if command -v npm >/dev/null 2>&1; then
++      echo "[OK-NPM] npm available for $pkg"
++    else
++      echo "[MISSING-NPM] npm not available for $pkg (will attempt to install node)" >&2
++      failed=1
++    fi
++    continue
++  fi
++
++  # Policy: direct terraform entries are not allowed
++  if [[ "$raw" =~ ^terraform$ ]]; then
++    echo "[POLICY-VIOLATION] Direct terraform install is prohibited. Use tfswitch instead." >&2
++    failed=1
++    continue
++  fi
++
++  # Support pipx:package entries
++  if [[ "$raw" =~ ^pipx:([^[:space:]]+)$ ]]; then
++    pkg="${BASH_REMATCH[1]}"
++    if command -v pipx >/dev/null 2>&1; then
++      echo "[OK-PIPX] pipx available for $pkg"
++    else
++      echo "[MISSING-PIPX] pipx not available for $pkg (python3/pipx will be required)" >&2
++      failed=1
++    fi
++    continue
++  fi
++
++  # Regular formula name
++  if brew info "$raw" >/dev/null 2>&1; then
++    echo "[OK] $raw"
++  else
++    echo "[MISSING] $raw" >&2
++    failed=1
++  fi
++done < "$TOOLS_FILE"
++
++exit $failed
+diff --git a/tools.txt b/tools.txt
+index 7b68dd5..0cc2f75 100644
+--- a/tools.txt
++++ b/tools.txt
+@@ -1,19 +1,51 @@
++## Cloud CLIs
+ awscli
+ azure-cli
++
++## Kubernetes & Cluster Ops
+ kubectl
+ helm
+-warrensbox/tap/tfswitch
++tap: derailed/k9s
++k9s
++
++## Version managers
++tap: warrensbox/tap
++tfswitch  # manage Terraform versions
++
++## Containers & Local Dev
+ docker
++
++## Security & Scanning
++tap: bridgecrewio/checkov
++checkov
++
++## Dev Utilities
+ git
+-bridgecrewio/checkov/checkov
+-derailed/k9s/k9s
+ jq
++yq
+ curl
+ httpie
+ wget
+-nmap
+-telnet
+-netcat
++node
++pnpm
++yarn
++
++# JS / Mobile tooling (installed via npm)
++npm:expo-cli
++npm:eas-cli
++npm:serve
++
++## Networking & Diagnostics
+ bind          # for dig
+ inetutils     # for nslookup
++nmap
++netcat
++telnet
+ wireshark
++
++## Optional (enable if your team uses these)
++tap: hashicorp/tap
++vault
++consul
++packer
++
+-- 
+2.50.1 (Apple Git-155)
+
