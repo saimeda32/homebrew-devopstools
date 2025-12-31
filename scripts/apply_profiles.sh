@@ -9,6 +9,8 @@ set -euo pipefail
 #   ./scripts/apply_profiles.sh --profiles all --yes
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Homebrew opt root for this package
+BREW_OPT_ROOT="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/devopstools"
 PROFILES_DIR="$REPO_ROOT/profiles"
 INSTALL_SH="$REPO_ROOT/install.sh"
 
@@ -129,7 +131,21 @@ if [ "$NON_INTERACTIVE" -eq 0 ] && [ "$YES" -ne 1 ]; then
   esac
 fi
 
-# Call installer
+# Prefer repo-local bin/install.sh (formula installs it into bin)
+if [ -f "$REPO_ROOT/bin/install.sh" ]; then
+  INSTALL_SH="$REPO_ROOT/bin/install.sh"
+fi
+# If not present in the repo, prefer libexec or bin under Homebrew opt
+if [ ! -f "$INSTALL_SH" ]; then
+  if [ -x "$BREW_OPT_ROOT/libexec/install.sh" ]; then
+    INSTALL_SH="$BREW_OPT_ROOT/libexec/install.sh"
+  elif [ -f "$BREW_OPT_ROOT/bin/install.sh" ]; then
+    INSTALL_SH="$BREW_OPT_ROOT/bin/install.sh"
+  elif [ -f "$BREW_OPT_ROOT/install.sh" ]; then
+    INSTALL_SH="$BREW_OPT_ROOT/install.sh"
+  fi
+fi
+
 if [ ! -x "$INSTALL_SH" ]; then
   echo "Installer not found or not executable at $INSTALL_SH" >&2
   rm -f "$merged_tmp"
