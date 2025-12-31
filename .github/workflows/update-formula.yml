@@ -36,18 +36,30 @@ jobs:
 
       - name: Update Formula File (URL, version, and SHA256)
         run: |
-          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.tag }}.tar.gz\"|" Formula/devopstools.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${{ env.sha256 }}\"|" Formula/devopstools.rb
+          TARGET_URL="https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.tag }}.tar.gz"
+          TARGET_SHA="${{ env.sha256 }}"
+
+          sed -i "s|url \".*\"|url \"${TARGET_URL}\"|" Formula/devopstools.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${TARGET_SHA}\"|" Formula/devopstools.rb
           sed -i "s|version \".*\"|version \"${{ env.tag }}\"|" Formula/devopstools.rb
-          echo "✅ Formula file updated:"
+          echo "✅ Formula file updated (candidate):"
           cat Formula/devopstools.rb
 
-      - name: Commit and Push Changes to Main Branch (Handles Detached HEAD)
+      - name: Commit and Push Changes to Main Branch (Idempotent)
         run: |
           git fetch origin main
           git switch main
           git pull origin main
 
+          TARGET_URL="https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.tag }}.tar.gz"
+          TARGET_SHA="${{ env.sha256 }}"
+
+          # If the formula already contains the target URL and SHA, skip commit
+          if grep -qF "${TARGET_URL}" Formula/devopstools.rb && grep -qF "${TARGET_SHA}" Formula/devopstools.rb; then
+            echo "✅ Formula already up-to-date; skipping commit/push."
+            exit 0
+          fi
+
           git add Formula/devopstools.rb
-          git commit -m "CI: Update formula to version ${{ env.tag }}" || echo "✅ No changes to commit."
+          git commit -m "CI: Update formula to version ${{ env.tag }} [skip ci]" || echo "✅ No changes to commit."
           git push origin main
