@@ -76,18 +76,28 @@ Select from 11 curated profiles or create your own combinations:
 
 ## 🚀 Quick Start
 
-### For Everyone: One-Line Interactive Setup ⭐
+### Easiest: Install via Homebrew ⭐ (Recommended)
+
+```bash
+# Add the tap (one-time setup)
+brew tap saimeda32/homebrew-devopstools
+
+# Install devopstools
+brew install devopstools
+
+# Launch interactive setup
+devopstools-setup
+```
+
+Then just follow the friendly menu to select profiles, skip tools, and preview!
+
+### Clone & Run (Direct)
 
 ```bash
 git clone git@github-sai:saimeda32/homebrew-devopstools.git
 cd homebrew-devopstools
 ./start.sh
 ```
-
-That's it! This opens a friendly menu where you:
-1. Select profiles (or mix-and-match with numbers)
-2. Choose tools to skip (optional)
-3. Preview or install immediately
 
 ### Interactive Mode (Advanced)
 
@@ -117,17 +127,6 @@ That's it! This opens a friendly menu where you:
 # Non-interactive automation (CI/CD)
 ./install.sh --profiles base,devops --yes --non-interactive --no-dry-run
 ```
-
-### Via Homebrew (After Installation)
-
-```bash
-# Add the tap
-brew tap saimeda32/devopstools
-
-# Install the wrapper
-brew install devopstools
-
-# Run interactively
 devopstools-select
 
 # Or use direct commands

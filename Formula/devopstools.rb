@@ -1,50 +1,78 @@
 class Devopstools < Formula
-  desc "Bundle installer for DevOps tools"
-  homepage "https://github.com/saimeda32/devopstools"
-  url "https://github.com/saimeda32/homebrew-devopstools/archive/refs/tags/v1.0.19.tar.gz"
-  sha256 "f96245e53872ab7a49bc2024b0ff5bab82a43611f68d2ec3916066a316f65e3f"
-  version "1.0.19"
-
+  desc "AI-ready DevOps installer with 11 role-based profiles and interactive setup"
+  homepage "https://github.com/saimeda32/homebrew-devopstools"
+  url "https://github.com/saimeda32/homebrew-devopstools/archive/refs/heads/main.tar.gz"
+  version "2026.06"
+  sha256 :no_check  # Using main branch; users can verify with: brew audit --download --strict devopstools
 
   def install
-    # keep bin lean: install wrapper and top-level installer
-    bin.install "bin/devopstools"
+    # Install interactive entry point and core scripts
+    bin.install "start.sh" => "devopstools-setup"
     bin.install "install.sh"
+    bin.install "bin/devopstools"
 
-    # place helper scripts and curated profiles in libexec so the wrapper
-    # can reliably call them from the opt/libexec path
+    # Install helper scripts for profile management and QA
     libexec.install Dir["scripts/*"] if File.directory?("scripts")
-    # install profiles into the package prefix so scripts that expect
-    # REPO_ROOT/profiles will find them when the package is installed
+
+    # Install all role-based profiles
     if File.directory?("profiles")
       prefix.install "profiles"
     end
 
+    # Install tools inventory and documentation
     pkgshare.install "tools.txt"
+    pkgshare.install Dir["*.md"] if Dir["*.md"].any?
   end
 
   def post_install
-    # IMPORTANT: We do not auto-run the install script during `brew install`.
-    # Running external installers during formula installation can cause
-    # unexpected side effects and requires network/privileged operations.
-    # Users should run the bundled installer manually when ready:
-    #   #{opt_bin}/install.sh #{opt_pkgshare}/tools.txt
+    # Note: We don't auto-run the installer during 'brew install' as it requires
+    # user interaction and can trigger network operations and privilege escalation.
+    # Users should run the setup wizard when ready.
   end
 
   def caveats
     <<~EOS
-      To install the listed tools run:
+      ✅ Homebrew DevOps Tools installed!
 
-        #{opt_bin}/install.sh #{opt_pkgshare}/tools.txt
+      🚀 Quick Start (Interactive Mode):
 
-      This script is idempotent and will skip already-installed formulae.
-      Logs are written to: $HOME/Library/Logs/devopstools/install.log
+        devopstools-setup
+
+      This launches a friendly menu to:
+        • Select profiles (base, frontend, backend, devops, ai, etc.)
+        • Skip tools you don't want
+        • Preview before installing
+        • Confirm and go!
+
+      📖 For more options:
+
+        install.sh -h
+
+      Advanced Examples:
+
+        # Install specific profiles
+        install.sh --profiles base,frontend --dry-run
+
+        # Skip tools and merge profiles
+        install.sh --profiles devops,security --skip-tools docker --yes
+
+      💾 Logs saved to: $HOME/Library/Logs/devopstools/install.log
+
+      🎯 Available Profiles:
+        base, frontend, backend, devops, ai, fullstack,
+        security, observability, infra-modern, web3, devx
+
+      📚 Learn more:
+        https://github.com/saimeda32/homebrew-devopstools
     EOS
   end
 
   test do
-    # Basic sanity test: script exists and prints usage
+    # Verify core scripts exist and are executable
+    assert_predicate bin/"devopstools-setup", :exist?
     assert_predicate bin/"install.sh", :exist?
+    
+    # Basic sanity check on help output
     output = shell_output("#{bin}/install.sh -h", 2)
     assert_match "Usage:", output
   end
