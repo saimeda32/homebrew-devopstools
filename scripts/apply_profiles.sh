@@ -17,17 +17,28 @@ INSTALL_SH="$REPO_ROOT/install.sh"
 DRY_RUN=0
 NON_INTERACTIVE=0
 YES=0
+SKIP_TOOLS=""
 SELECTED_PROFILES=()
 
 print_usage(){
   cat <<EOF
-Usage: devopstools [--profiles base,frontend,backend,devops|all] [--dry-run] [--yes] [--non-interactive]
+Usage: devopstools [OPTIONS] [--profiles PROFILE1,PROFILE2,...]
 
-Examples:
-  devopstools --profiles base,devops            # merge 'base' and 'devops' profiles
-  devopstools --profiles all --yes --non-interactive  # select all profiles and run without prompts
+OPTIONS:
+  --profiles PROF1,PROF2,...      Comma-separated profile names (or 'all')
+  --skip-tools TOOL1,TOOL2,...    Comma-separated tools to skip
+  --dry-run                       Preview mode - no changes made
+  --yes                           Assume yes to all prompts
+  --non-interactive               Run without interactive prompts
+  -h, --help                      Show this help
 
-If --profiles is omitted the script runs an interactive menu.
+EXAMPLES:
+  devopstools --profiles base,devops
+  devopstools --profiles frontend --skip-tools yarn,npm
+  devopstools --profiles all --yes --non-interactive
+  devopstools --profiles base,backend --skip-tools docker --dry-run
+
+If --profiles is omitted, an interactive menu is shown.
 EOF
 }
 
@@ -45,6 +56,12 @@ while [ "$#" -gt 0 ]; do
     --profiles=*)
       arg="${1#--profiles=}"; shift
       IFS=',' read -ra SELECTED_PROFILES <<<"$arg"
+      ;;
+    --skip-tools)
+      shift; SKIP_TOOLS="$1"; shift
+      ;;
+    --skip-tools=*)
+      SKIP_TOOLS="${1#--skip-tools=}"; shift
       ;;
     --no-dry-run)
       DRY_RUN=0; shift ;;
@@ -152,11 +169,22 @@ if [ ! -x "$INSTALL_SH" ]; then
   exit 1
 fi
 
-if [ "$DRY_RUN" -eq 1 ]; then
-  "$INSTALL_SH" --dry-run "$merged_tmp"
-else
-  "$INSTALL_SH" "$merged_tmp"
+# Build installer command
+INSTALL_CMD=("$INSTALL_SH" "$merged_tmp")
+
+if [ -n "$SKIP_TOOLS" ]; then
+  INSTALL_CMD+=(--skip-tools "$SKIP_TOOLS")
 fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  INSTALL_CMD+=(--dry-run)
+fi
+
+if [ "$YES" -eq 1 ]; then
+  INSTALL_CMD+=(--yes)
+fi
+
+"${INSTALL_CMD[@]}"
 
 rm -f "$merged_tmp"
 

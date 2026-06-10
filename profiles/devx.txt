@@ -1,0 +1,28 @@
+# Developer Experience Profile
+# Quality-of-life tools for developers
+
+## Shell & CLI Enhancements
+starship
+fzf
+ripgrep
+bat
+exa
+
+## Tools Utilities
+curl
+jq
+yq
+httpie
+
+## Version Control
+git
+gh
+
+## Code Quality
+pipx:black
+pipx:ruff
+npm:prettier
+
+## Productivity
+wget
+mtr

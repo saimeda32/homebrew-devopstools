@@ -1,0 +1,24 @@
+# Observability & Monitoring Profile
+# Tools for logging, monitoring, tracing, and metrics
+
+## Metrics & Monitoring
+prometheus
+grafana
+
+## Logging
+tap: grafana/grafana-loki
+loki
+
+## Distributed Tracing
+# jaeger (available via docker: docker run -d --name jaeger jaegertracing/all-in-one)
+
+## Development Essentials
+docker
+git
+curl
+jq
+yq
+kubectl
+
+## CLI Utilities
+httpie

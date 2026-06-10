@@ -1,0 +1,36 @@
+# Full-Stack Development Profile
+# Everything for modern full-stack applications
+
+## Frontend & Node.js
+node
+pnpm
+yarn
+bun
+npm:create-react-app
+npm:expo-cli
+npm:eas-cli
+npm:serve
+
+## Backend
+python@3.13
+uv
+pipx:poetry
+pipx:black
+pipx:isort
+pipx:ruff
+
+## Containers & DevOps
+docker
+colima
+
+## Development Essentials
+git
+curl
+jq
+yq
+fzf
+ripgrep
+bat
+
+## Code Tools
+gh

@@ -1,8 +1,14 @@
 # Backend profile
-python@3.11
+python@3.13
+python@3.12
+uv
 pipx:black
 pipx:isort
+pipx:ruff
 pipx:poetry
+pipx:pytest
+pipx:mypy
 git
 curl
 yq
+docker

@@ -1,0 +1,30 @@
+# Security & Compliance Profile
+# Tools for security audits, vulnerability scanning, and compliance
+
+## Core Security Tools
+tap: bridgecrewio/checkov
+checkov
+trivy
+grype
+tfsec
+cosign
+
+## Secrets & Access Management
+tap: hashicorp/tap
+vault
+
+## Code Security
+npm:snyk
+
+## Network & Diagnostics
+nmap
+wireshark
+bind
+inetutils
+mtr
+
+## Development Essentials
+git
+curl
+jq
+yq

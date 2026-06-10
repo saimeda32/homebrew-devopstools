@@ -1,0 +1,22 @@
+# Web3 & Blockchain Development Profile
+# Tools for smart contract development and blockchain
+
+## Solidity Development
+tap: foundry-rs/foundry
+foundry
+
+## JavaScript/TypeScript Runtime
+node
+pnpm
+yarn
+deno
+bun
+
+## Development Tools
+git
+curl
+jq
+yq
+
+## Deployment & Management
+docker

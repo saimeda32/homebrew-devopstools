@@ -8,3 +8,8 @@ inetutils
 netcat
 wget
 wireshark
+gh                  # GitHub CLI
+fzf                 # Fuzzy finder
+ripgrep             # Fast grep alternative
+bat                 # Better cat with syntax highlighting
+

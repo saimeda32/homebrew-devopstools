@@ -1,51 +1,111 @@
-## Cloud CLIs
+## ============ CLOUD & INFRASTRUCTURE ============
+
+### Cloud CLIs
 awscli
 azure-cli
 
-## Kubernetes & Cluster Ops
+### Kubernetes & Cluster Ops
 kubectl
 helm
 tap: derailed/k9s
 k9s
+kustomize
+tap: argoproj/argocd
+argocd
 
-## Version managers
+### IaC & Infrastructure
 tap: warrensbox/tap
 tfswitch  # manage Terraform versions
+pulumi
+tap: hashicorp/tap
+vault
+packer
 
-## Containers & Local Dev
+### Container Runtimes & Local Dev
 docker
+colima        # Docker alternative for macOS
+podman        # containerization without daemon
+lima          # Linux VM for container workloads
 
-## Security & Scanning
-tap: bridgecrewio/checkov
-checkov
+## ============ AI/LLM & MACHINE LEARNING ============
+ollama        # Local LLM running
+pipx:langchain          # LLM framework
+pipx:jupyterlab         # Interactive notebooks
+pipx:jupyter            # Jupyter core
+pipx:ipython            # Enhanced Python shell
+pipx:tqdm               # Progress bars for ML workflows
 
-## Dev Utilities
-git
-jq
-yq
-curl
-httpie
-wget
+## ============ MODERN RUNTIMES & PACKAGE MANAGERS ============
+uv                      # Fast Python package manager (replaces pip/poetry for many tasks)
+bun                     # Fast JavaScript runtime (alternative to Node for some tasks)
+deno                    # TypeScript runtime
 node
 pnpm
 yarn
+npm:pnpm                # pnpm via npm (backup)
+npm:yarn                # yarn via npm (backup)
 
-# JS / Mobile tooling (installed via npm)
-npm:expo-cli
-npm:eas-cli
-npm:serve
+### Python Versions
+python@3.12
+python@3.13
 
-## Networking & Diagnostics
-bind          # for dig
-inetutils     # for nslookup
-nmap
-netcat
-telnet
-wireshark
+### Python Development Tools
+pipx:black              # Code formatter
+pipx:isort              # Import sorter
+pipx:ruff               # Fast Python linter (faster than black/isort combo)
+pipx:poetry             # Dependency management
+pipx:pytest             # Testing framework
+pipx:mypy               # Type checking
 
-## Optional (enable if your team uses these)
-tap: hashicorp/tap
-vault
-consul
-packer
+## ============ SECURITY & COMPLIANCE ============
+tap: bridgecrewio/checkov
+checkov                 # Infrastructure security scanning
+trivy                   # Vulnerability scanner (better for container images)
+grype                   # Software supply chain security
+tfsec                   # Terraform security scanning
+npm:snyk                # Vulnerabilities in code
+cosign                  # Container signing and verification
+
+## ============ OBSERVABILITY & MONITORING ============
+prometheus              # Metrics collection
+grafana                 # Visualization & dashboards
+tap: grafana/grafana-loki
+loki                    # Log aggregation
+
+## ============ WEB3 & BLOCKCHAIN ============
+tap: foundry-rs/foundry
+foundry                 # Solidity development toolkit
+
+## ============ DEV UTILITIES & CLI TOOLS ============
+git
+jq                      # JSON query
+yq                      # YAML query
+curl
+httpie                  # User-friendly curl
+wget
+skaffold                # Kubernetes development workflow
+gh                      # GitHub CLI
+fzf                     # Fuzzy finder
+ripgrep                 # Fast grep alternative
+bat                     # Better cat with syntax highlighting
+exa                     # Modern ls alternative
+starship                # Cross-shell prompt
+
+## ============ JS/MOBILE/FRONTEND ============
+npm:expo-cli            # React Native CLI
+npm:eas-cli             # Expo Application Services
+npm:serve               # HTTP server for static files
+npm:create-react-app    # React boilerplate
+npm:vue                 # Vue CLI
+npm:next                # Next.js framework
+
+## ============ NETWORKING & DIAGNOSTICS ============
+bind                    # for dig DNS lookups
+inetutils               # for nslookup and other utilities
+nmap                    # Network scanning
+netcat                  # Network utility
+telnet                  # Network protocol client
+wireshark               # Network packet analyzer
+mtr                     # Combined traceroute + ping
+
 

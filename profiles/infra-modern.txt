@@ -1,0 +1,33 @@
+# Modern Infrastructure Profile
+# Next-generation IaC and infrastructure tools
+
+## IaC & Infrastructure
+pulumi
+tap: warrensbox/tap
+tfswitch
+
+## Kubernetes
+kubectl
+helm
+kustomize
+tap: argoproj/argocd
+argocd
+
+## Cloud CLIs
+awscli
+azure-cli
+
+## Containers
+docker
+colima
+podman
+
+## Development Essentials
+git
+curl
+jq
+yq
+gh
+
+## GitOps & Tools
+npm:serve

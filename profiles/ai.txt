@@ -1,0 +1,31 @@
+# AI/LLM Development Profile
+# Essential tools for ML engineers and AI development
+
+## Python Runtime
+python@3.13
+python@3.12
+uv
+
+## LLM & ML Frameworks
+ollama
+pipx:langchain
+pipx:jupyter
+pipx:jupyterlab
+pipx:ipython
+pipx:tqdm
+pipx:pytest
+pipx:mypy
+
+## Development Essentials
+git
+curl
+jq
+yq
+
+## Code Quality
+pipx:black
+pipx:isort
+pipx:ruff
+
+## Data & Analysis Tools
+npm:http-server

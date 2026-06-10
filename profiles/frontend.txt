@@ -2,8 +2,13 @@
 node
 pnpm
 yarn
+bun
 npm:expo-cli
 npm:eas-cli
+npm:serve
+npm:create-react-app
 git
 curl
 yq
+fzf
+ripgrep

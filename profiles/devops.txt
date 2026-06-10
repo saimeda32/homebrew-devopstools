@@ -5,10 +5,20 @@ azure-cli
 kubectl
 helm
 k9s
+kustomize
+tap: argoproj/argocd
+argocd
 checkov
-consul
+trivy
+grype
+tfsec
+tap: hashicorp/tap
 vault
 packer
+pulumi
 git
 curl
 yq
+docker
+colima
+gh
